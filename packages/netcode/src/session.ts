@@ -37,6 +37,8 @@ export interface SessionOptions {
   /** Injected so the harness can run on virtual time. */
   now?: () => number;
   onWelcome?: (slot: number, tickRate: number) => void;
+  /** Who is in the room, by slot. Sent on join and leave, never in a snapshot. */
+  onRoster?: (names: string[]) => void;
   onSnapshot?: (snapshot: WireSnapshot) => void;
   onFull?: () => void;
   onClose?: () => void;
@@ -146,6 +148,10 @@ export class ClientSession {
         }
         break;
       }
+
+      case 'roster':
+        this.options.onRoster?.(msg.names);
+        break;
 
       case 'full':
         this.options.onFull?.();

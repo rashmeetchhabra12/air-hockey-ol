@@ -99,7 +99,44 @@ export type ServerMessage =
   | { t: 'welcome'; slot: number; tick: number; tickRate: number }
   | WireSnapshot
   | { t: 'pong'; id: number; sent: number; serverTick: number }
-  | { t: 'full' };
+  | { t: 'full' }
+  /**
+   * Who is in the room, indexed by slot. Empty string for a vacant seat.
+   *
+   * Sent on join and on leave — deliberately *not* carried in the snapshot. A
+   * name changes once per connection while snapshots go out twenty times a
+   * second, and the binary format gets them down to around forty bytes. Putting
+   * a string in each one would undo that for information that never changes.
+   */
+  | { t: 'roster'; names: string[] };
+
+/** Longest accepted display name. Enforced server-side, not merely in the input. */
+export const MAX_NAME_LENGTH = 16;
+
+/**
+ * Make a client-supplied name safe to store, broadcast, and draw.
+ *
+ * Applied on the server, because anything a client sends is a suggestion. Strips
+ * control characters — which could otherwise corrupt the rendered scoreboard —
+ * collapses whitespace, and bounds the length so one player cannot push the
+ * other's name off the screen.
+ */
+export function sanitizeName(raw: unknown, fallback = 'Player'): string {
+  if (typeof raw !== 'string') return fallback;
+  // Character-by-character rather than a regex character class: control
+  // codepoints are exactly the thing that goes wrong when written as escapes
+  // in source, and a name that corrupts the scoreboard is a real, if minor,
+  // way for one player to spoil the other's screen.
+  let kept = '';
+  for (const ch of raw) {
+    const code = ch.codePointAt(0) ?? 0;
+    const isControl = code < 0x20 || (code >= 0x7f && code <= 0x9f);
+    if (!isControl) kept += ch;
+  }
+
+  const cleaned = kept.replace(/\s+/g, ' ').trim().slice(0, MAX_NAME_LENGTH);
+  return cleaned.length > 0 ? cleaned : fallback;
+}
 
 /** Guard used by every decode path. `NaN` and `Infinity` must never reach the simulation. */
 export function isFiniteNumber(v: unknown): v is number {

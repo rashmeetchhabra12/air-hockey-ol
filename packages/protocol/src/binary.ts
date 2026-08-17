@@ -45,6 +45,10 @@ const MSG_PONG = 3;
 const MSG_FULL = 4;
 const MSG_INPUT = 5;
 const MSG_PING = 6;
+const MSG_ROSTER = 7;
+
+const TEXT_ENCODER = new TextEncoder();
+const TEXT_DECODER = new TextDecoder();
 
 const FLAG_KEYFRAME = 1;
 
@@ -102,6 +106,22 @@ class Writer {
     this.offset += 8;
   }
 
+  /**
+   * Length-prefixed UTF-8.
+   *
+   * A single byte of length is enough because names are capped at 16 characters
+   * before they reach here, which is at most 64 bytes even for four-byte
+   * codepoints. Truncating here instead would risk cutting a character in half
+   * and producing a replacement glyph on screen.
+   */
+  str(value: string): void {
+    const bytes = TEXT_ENCODER.encode(value);
+    const length = Math.min(bytes.length, 255);
+    this.u8(length);
+    new Uint8Array(this.buffer, this.offset, length).set(bytes.subarray(0, length));
+    this.offset += length;
+  }
+
   finish(): ArrayBuffer {
     return this.buffer.slice(0, this.offset);
   }
@@ -153,6 +173,13 @@ class Reader {
     const v = this.view.getFloat64(this.offset, true);
     this.offset += 8;
     return v;
+  }
+
+  str(): string {
+    const length = this.u8();
+    const bytes = new Uint8Array(this.view.buffer, this.view.byteOffset + this.offset, length);
+    this.offset += length;
+    return TEXT_DECODER.decode(bytes);
   }
 }
 
@@ -364,6 +391,11 @@ export function createBinaryCodec(): Codec & { forceKeyframe(): void } {
         case 'full':
           w.u8(MSG_FULL);
           return w.finish();
+        case 'roster':
+          w.u8(MSG_ROSTER);
+          w.u8(msg.names.length);
+          for (const name of msg.names) w.str(name);
+          return w.finish();
       }
     },
 
@@ -380,6 +412,13 @@ export function createBinaryCodec(): Codec & { forceKeyframe(): void } {
             return { t: 'pong', id: r.u32(), sent: r.f64(), serverTick: r.i32() };
           case MSG_FULL:
             return { t: 'full' };
+          case MSG_ROSTER: {
+            const count = r.u8();
+            if (count > 8) return null;
+            const names: string[] = [];
+            for (let i = 0; i < count; i++) names.push(r.str());
+            return { t: 'roster', names };
+          }
           default:
             return null;
         }

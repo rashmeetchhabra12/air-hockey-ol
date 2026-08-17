@@ -12,7 +12,8 @@
   "scripts": {
     "measure": "vite-node src/run.ts",
     "verify:online": "vite-node verify-online.ts",
-    "verify:concurrent": "vite-node verify-concurrent.ts"
+    "verify:concurrent": "vite-node verify-concurrent.ts",
+    "verify:matchmaking": "vite-node verify-matchmaking.ts"
   },
   "dependencies": {
     "@ah/netcode": "*",

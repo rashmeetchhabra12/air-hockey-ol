@@ -19,7 +19,8 @@
     "measure": "npm run measure -w @ah/harness --",
     "verify:online": "npm run verify:online -w @ah/harness",
     "deploy": "npm run build -w @ah/client && wrangler deploy",
-    "verify:concurrent": "npm run verify:concurrent -w @ah/harness"
+    "verify:concurrent": "npm run verify:concurrent -w @ah/harness",
+    "verify:matchmaking": "npm run verify:matchmaking -w @ah/harness"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

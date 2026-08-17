@@ -30,6 +30,7 @@ export interface ClientOptions {
   conditions: () => NetworkConditions;
   onStateChange?: (state: ConnectionState) => void;
   onWelcome?: (slot: number) => void;
+  onRoster?: (names: string[]) => void;
   onSnapshot?: (snapshot: WireSnapshot) => void;
 }
 
@@ -84,6 +85,7 @@ export class GameClient {
         ...(this.options.codec ? { codec: this.options.codec } : {}),
         now: () => performance.now(),
         onWelcome: (slot) => this.options.onWelcome?.(slot),
+        onRoster: (names) => this.options.onRoster?.(names),
         onSnapshot: (snapshot) => this.options.onSnapshot?.(snapshot),
         onFull: () => {
           this.setState('full');

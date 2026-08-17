@@ -43,14 +43,51 @@ class TestClient {
   }
 }
 
-function connect(room: GameRoom): { client: TestClient; slot: number | null } {
+function connect(
+  room: GameRoom,
+  name?: string,
+): { client: TestClient; slot: number | null } {
   const [serverEnd, clientEnd] = createLoopbackPair();
   const client = new TestClient(clientEnd);
-  const slot = room.join(serverEnd);
+  const slot = name === undefined ? room.join(serverEnd) : room.join(serverEnd, name);
   return { client, slot };
 }
 
 describe('GameRoom', () => {
+  it('announces who is in the room on join and on leave', () => {
+    const room = new GameRoom({ snapshotIntervalTicks: 100 });
+    const a = connect(room, 'Alice');
+    expect(a.client.of('roster')[0]!.names).toEqual(['Alice', '']);
+
+    const b = connect(room, 'Bob');
+    // Both sides learn of the arrival, not just the newcomer.
+    expect(a.client.of('roster').at(-1)!.names).toEqual(['Alice', 'Bob']);
+    expect(b.client.of('roster').at(-1)!.names).toEqual(['Alice', 'Bob']);
+
+    b.client.transport.close();
+    expect(a.client.of('roster').at(-1)!.names).toEqual(['Alice', '']);
+  });
+
+  /**
+   * The room broadcasts the roster, so the room is responsible for the roster
+   * being sendable. An over-long name would otherwise be refused by the codec
+   * at the far end and the message would vanish without trace.
+   */
+  it('bounds a name it was handed, rather than trusting the caller', () => {
+    const room = new GameRoom({ snapshotIntervalTicks: 100 });
+    const a = connect(room, 'A'.repeat(200));
+
+    const names = a.client.of('roster')[0]!.names;
+    expect(names[0]!.length).toBeLessThanOrEqual(16);
+    expect(names[0]!.length).toBeGreaterThan(0);
+  });
+
+  it('falls back to a placeholder for an empty name', () => {
+    const room = new GameRoom({ snapshotIntervalTicks: 100 });
+    const a = connect(room, '   ');
+    expect(a.client.of('roster')[0]!.names[0]).toBe('Player');
+  });
+
   it('welcomes peers into sequential slots', () => {
     const room = new GameRoom();
 
@@ -263,7 +300,8 @@ describe('GameRoom', () => {
     const stats = room.getClientStats()[0]!;
     expect(stats.bytesSent).toBeGreaterThan(0);
     expect(stats.bytesReceived).toBeGreaterThan(0);
-    expect(stats.messagesSent).toBe(1 + 20); // welcome + one second of snapshots
+    // welcome + roster + one second of snapshots
+    expect(stats.messagesSent).toBe(2 + 20);
   });
 
   it('stops the departed player s paddle where it stands', () => {

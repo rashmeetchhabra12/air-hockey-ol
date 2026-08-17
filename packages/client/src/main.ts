@@ -16,6 +16,7 @@ import {
 import { FixedTimestepLoop } from '@ah/server/loop';
 import { TICK_RATE } from '@ah/sim';
 
+import { LobbyClient } from './lobby.js';
 import { LocalMatch } from './local.js';
 import { GameClient, type ConnectionState } from './net.js';
 import { render, screenToRink, type DebugView, type View, type ViewState } from './render.js';
@@ -58,6 +59,15 @@ const el = {
   lossOut: document.querySelector<HTMLElement>('#loss-value')!,
   banner: document.querySelector<HTMLElement>('#banner')!,
   hint: document.querySelector<HTMLElement>('#hint')!,
+  start: document.querySelector<HTMLElement>('#start')!,
+  startNote: document.querySelector<HTMLElement>('#start-note')!,
+  nameInput: document.querySelector<HTMLInputElement>('#name')!,
+  playHuman: document.querySelector<HTMLButtonElement>('#play-human')!,
+  playBot: document.querySelector<HTMLButtonElement>('#play-bot')!,
+  watch: document.querySelector<HTMLButtonElement>('#watch')!,
+  searching: document.querySelector<HTMLElement>('#searching')!,
+  searchingText: document.querySelector<HTMLElement>('#searching-text')!,
+  searchingCancel: document.querySelector<HTMLButtonElement>('#searching-cancel')!,
   hud: document.querySelector<HTMLElement>('#hud')!,
   netcodeText: document.querySelector<HTMLElement>('#netcode-text')!,
 };
@@ -104,6 +114,8 @@ interface ActiveMatch {
   predictor(): Predictor | null;
   buffer(): SnapshotBuffer | null;
   rttMs(): number;
+  /** Display names by slot, empty where nobody is seated. */
+  roster(): string[];
   status(): string | null;
   setTarget(x: number, y: number): void;
   dispose(): void;
@@ -134,6 +146,7 @@ function createLocal(mode: 'spectate' | 'bot'): ActiveMatch {
     predictor: () => match.view().predictor,
     buffer: () => match.view().buffer,
     rttMs: () => match.rttMs,
+    roster: () => (mode === 'bot' ? [playerName, 'Bot'] : ['Bot A', 'Bot B']),
     status: () => (match.ready ? null : 'starting...'),
     setTarget: (x, y) => match.setHumanTarget(x, y),
     dispose: () => match.dispose(),
@@ -155,25 +168,28 @@ function defaultServerUrl(): string {
   return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
 }
 
-function createOnline(): ActiveMatch {
+/**
+ * Where the authoritative server lives, most specific first: an explicit
+ * `?server=` override, then the value baked in at build time, then the page's
+ * own origin.
+ */
+function serverBase(): string {
+  const params = new URLSearchParams(location.search);
+  return params.get('server') ?? import.meta.env['VITE_SERVER_URL'] ?? defaultServerUrl();
+}
+
+function createOnline(room: string, name: string): ActiveMatch {
+  const base = serverBase();
   const predictor = new Predictor(0);
   const buffer = new SnapshotBuffer();
   const pacer = new TickPacer();
   let target = { x: 0, y: 0 };
   let state: ConnectionState = 'connecting';
+  let roster: string[] = [];
 
-  const params = new URLSearchParams(location.search);
-  const room = params.get('room') ?? 'default';
-  /**
-   * Where the authoritative server lives, most specific source first:
-   * an explicit `?server=` override, then the value baked in at build time,
-   * then a local worker for development.
-   *
-   * Only human-vs-human needs any of this — spectate and vs-bot host their own
-   * room in the page — so a deployment with no worker at all still works.
-   */
-  const base = params.get('server') ?? import.meta.env['VITE_SERVER_URL'] ?? defaultServerUrl();
-  const url = `${base}/ws?room=${encodeURIComponent(room)}${useJsonCodec ? '&codec=json' : ''}`;
+  const url =
+    `${base}/ws?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}` +
+    (useJsonCodec ? '&codec=json' : '');
 
   const client = new GameClient({
     url,
@@ -183,6 +199,9 @@ function createOnline(): ActiveMatch {
       state = s;
     },
     onWelcome: (slot) => predictor.setSlot(slot),
+    onRoster: (names) => {
+      roster = names;
+    },
     onSnapshot: (snapshot: WireSnapshot) => {
       buffer.push(snapshot, performance.now());
       if (!netcodeEnabled) return;
@@ -214,6 +233,7 @@ function createOnline(): ActiveMatch {
     predictor: () => predictor,
     buffer: () => buffer,
     rttMs: () => client.rttMs,
+    roster: () => roster,
     status: () => (buffer.newest() ? null : (STATUS[state] ?? null)),
     setTarget: (x, y) => {
       target = { x, y };
@@ -225,36 +245,117 @@ function createOnline(): ActiveMatch {
 const HINTS: Record<string, string> = {
   spectate: 'Two bots playing in your browser. Drag Latency up, then toggle Netcode off.',
   bot: 'Move your mouse or finger to control the cyan paddle.',
-  online: 'Waiting for a second player — open this URL in another tab or window.',
+  online: 'Playing a human. Both of you see the same authoritative match.',
 };
 
-function createForMode(mode: string): ActiveMatch {
-  return mode === 'online' ? createOnline() : createLocal(mode === 'bot' ? 'bot' : 'spectate');
-}
-
 /**
- * Opening mode, overridable from the URL.
+ * Player name, remembered between visits.
  *
- * `?mode=online` matters for more than convenience: playing a human requires two
- * tabs, and asking someone to open two tabs *and* change a dropdown in each is a
- * step too many for a link you are sharing.
+ * localStorage rather than anything server-side: there is no account to attach
+ * it to, and a returning player should not have to type it again.
  */
-const requestedMode = new URLSearchParams(location.search).get('mode') ?? 'spectate';
-const initialMode = ['spectate', 'bot', 'online'].includes(requestedMode)
-  ? requestedMode
-  : 'spectate';
-el.mode.value = initialMode;
+const NAME_KEY = 'air-hockey:name';
+let playerName = localStorage.getItem(NAME_KEY) ?? '';
 
-let active: ActiveMatch = createForMode(initialMode);
+let active: ActiveMatch = createLocal('spectate');
+let lobby: LobbyClient | null = null;
 
-function switchMode(mode: string): void {
+function switchMode(mode: string, room?: string): void {
   active.dispose();
   puckSmoother.reset();
-  active = createForMode(mode);
+  active =
+    mode === 'online'
+      ? createOnline(room ?? 'default', playerName || 'Player')
+      : createLocal(mode === 'bot' ? 'bot' : 'spectate');
+  el.mode.value = mode;
   el.hint.textContent = HINTS[mode] ?? '';
 }
 
-el.mode.addEventListener('change', () => switchMode(el.mode.value));
+/**
+ * Look for a human opponent, and play the bot in the meantime.
+ *
+ * The wait is deliberately not presented as a wait. A blank "searching" screen
+ * is the moment a visitor leaves, and there is already a capable opponent
+ * running in the page — so a match starts at once and is swapped for a human
+ * one as soon as matchmaking finds somebody.
+ */
+function findHumanOpponent(): void {
+  switchMode('bot');
+  el.mode.value = 'online';
+  el.searching.classList.add('visible');
+  el.searchingText.textContent = 'Looking for an opponent…';
+
+  lobby?.cancel();
+  const client = new LobbyClient({
+    url: serverBase(),
+    name: playerName || 'Player',
+    onState: (state, detail) => {
+      if (state === 'searching') {
+        el.searchingText.textContent =
+          client.ahead > 0 ? `Waiting — ${client.ahead} ahead of you` : 'Looking for an opponent…';
+      } else if (state === 'error') {
+        el.searchingText.textContent = detail ?? 'matchmaking unavailable';
+        // Leave them in the bot match rather than dropping them out of a game
+        // they are already playing.
+        setTimeout(() => el.searching.classList.remove('visible'), 4000);
+      }
+    },
+    onMatched: (room, opponent) => {
+      el.searching.classList.remove('visible');
+      el.banner.style.display = 'block';
+      el.banner.textContent = `MATCHED WITH ${opponent.toUpperCase()}`;
+      setTimeout(() => {
+        if (netcodeEnabled) el.banner.style.display = 'none';
+      }, 3000);
+      switchMode('online', room);
+    },
+  });
+  lobby = client;
+  client.search();
+}
+
+function stopSearching(): void {
+  lobby?.cancel();
+  lobby = null;
+  el.searching.classList.remove('visible');
+}
+
+el.searchingCancel.addEventListener('click', () => {
+  stopSearching();
+  el.mode.value = 'bot';
+});
+
+el.mode.addEventListener('change', () => {
+  stopSearching();
+  if (el.mode.value === 'online') findHumanOpponent();
+  else switchMode(el.mode.value);
+});
+
+// ---------------------------------------------------------------------------
+// Start screen
+// ---------------------------------------------------------------------------
+
+el.nameInput.value = playerName;
+
+function commitName(): void {
+  playerName = el.nameInput.value.trim().slice(0, 16) || 'Player';
+  localStorage.setItem(NAME_KEY, playerName);
+  el.nameInput.value = playerName;
+}
+
+function begin(mode: 'spectate' | 'bot' | 'human'): void {
+  commitName();
+  el.start.classList.add('hidden');
+  if (mode === 'human') findHumanOpponent();
+  else switchMode(mode);
+}
+
+el.playHuman.addEventListener('click', () => begin('human'));
+el.playBot.addEventListener('click', () => begin('bot'));
+el.watch.addEventListener('click', () => begin('spectate'));
+el.nameInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') begin('human');
+});
 
 el.netcode.addEventListener('change', () => {
   netcodeEnabled = el.netcode.checked;
@@ -379,6 +480,7 @@ function buildScene(nowMs: number, deltaMs: number): ViewState | null {
       status: null,
       debug,
       countdown,
+      names: active.roster(),
     };
   }
 
@@ -399,6 +501,7 @@ function buildScene(nowMs: number, deltaMs: number): ViewState | null {
     status: null,
     debug,
     countdown,
+    names: active.roster(),
     ...(goalFlash > 0.01 ? { goalFlash: { intensity: goalFlash, slot: goalFlashSlot } } : {}),
   };
 }
@@ -459,5 +562,17 @@ function frame(): void {
 
 syncConditions();
 resize();
-el.hint.textContent = HINTS[initialMode] ?? HINTS['spectate']!;
+// `?mode=` skips the start screen, for a link meant to land somewhere specific.
+const requested = new URLSearchParams(location.search).get('mode');
+if (requested === 'bot' || requested === 'spectate') {
+  el.start.classList.add('hidden');
+  switchMode(requested);
+} else if (requested === 'online') {
+  el.start.classList.add('hidden');
+  commitName();
+  findHumanOpponent();
+} else {
+  el.hint.textContent = HINTS['spectate']!;
+}
+
 requestAnimationFrame(frame);

@@ -4,7 +4,15 @@ export type {
   WireInput,
   WireSnapshot,
 } from './messages.js';
-export { isFiniteNumber, isSafeInt } from './messages.js';
+export { isFiniteNumber, isSafeInt, sanitizeName, MAX_NAME_LENGTH } from './messages.js';
+
+export type { LobbyClientMessage, LobbyServerMessage } from './lobby.js';
+export {
+  encodeLobbyClient,
+  decodeLobbyClient,
+  encodeLobbyServer,
+  decodeLobbyServer,
+} from './lobby.js';
 
 export type { Codec } from './codec.js';
 export { jsonCodec, wireSize } from './codec.js';

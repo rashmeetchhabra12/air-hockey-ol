@@ -56,6 +56,8 @@ export interface DebugView {
 }
 
 export interface ViewState {
+  /** Display names by slot. Empty entries are simply not drawn. */
+  names?: readonly string[];
   /** Seconds remaining before play begins, or 0. Shown large at centre ice. */
   countdown?: number;
   /** 0..1, decaying. Pulses the rink edge in the scorer's colour after a goal. */
@@ -225,7 +227,12 @@ function drawDebug(ctx: CanvasRenderingContext2D, view: View, debug: DebugView):
   }
 }
 
-function drawScore(ctx: CanvasRenderingContext2D, view: View, score: readonly number[]): void {
+function drawScore(
+  ctx: CanvasRenderingContext2D,
+  view: View,
+  score: readonly number[],
+  names: readonly string[],
+): void {
   const cx = view.offsetX + (RINK_WIDTH / 2) * view.scale;
   const cy = view.offsetY + 62 * view.scale;
   const size = Math.max(26, 62 * view.scale);
@@ -245,6 +252,25 @@ function drawScore(ctx: CanvasRenderingContext2D, view: View, score: readonly nu
   ctx.textAlign = 'left';
   ctx.fillStyle = COLORS.slot[1];
   ctx.fillText(String(score[1] ?? 0), cx + size * 0.45, cy);
+
+  // Names sit under their own score, in their own colour, so it is obvious at a
+  // glance which half of the rink belongs to whom.
+  const nameSize = Math.max(11, 16 * view.scale);
+  ctx.font = `600 ${nameSize}px ui-sans-serif, system-ui, sans-serif`;
+  const nameY = cy + size * 0.62;
+
+  if (names[0]) {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = COLORS.slot[0];
+    ctx.globalAlpha = 0.85;
+    ctx.fillText(names[0], cx - size * 0.45, nameY);
+  }
+  if (names[1]) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = COLORS.slot[1];
+    ctx.globalAlpha = 0.85;
+    ctx.fillText(names[1], cx + size * 0.45, nameY);
+  }
   ctx.restore();
 }
 
@@ -345,7 +371,7 @@ export function render(
 
   drawPuck(ctx, view, scene.puck);
   if (scene.debug) drawDebug(ctx, view, scene.debug);
-  drawScore(ctx, view, scene.score);
+  drawScore(ctx, view, scene.score, scene.names ?? []);
   if (scene.countdown && scene.countdown > 0) drawCountdown(ctx, view, scene.countdown);
 
   if (scene.status) drawStatus(ctx, view, scene.status);

@@ -154,6 +154,13 @@ export const jsonCodec: Codec = {
       case 'full':
         return { t: 'full' };
 
+      case 'roster': {
+        const names = o['names'];
+        if (!Array.isArray(names) || names.length > 8) return null;
+        if (!names.every((n) => typeof n === 'string' && n.length <= 64)) return null;
+        return { t: 'roster', names: names as string[] };
+      }
+
       default:
         return null;
     }

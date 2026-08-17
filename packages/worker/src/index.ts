@@ -1,6 +1,7 @@
 import {
   createBinaryCodec,
   jsonCodec,
+  sanitizeName,
   webSocketTransport,
   type Codec,
   type WebSocketLike,
@@ -19,6 +20,7 @@ import { TICK_RATE } from '@ah/sim';
 
 export interface Env {
   ROOM: DurableObjectNamespace;
+  LOBBY: DurableObjectNamespace;
 }
 
 /**
@@ -38,6 +40,8 @@ const MAX_CATCHUP_TICKS = 5;
  * two and should find the match still in progress rather than reset.
  */
 const IDLE_SHUTDOWN_MS = 10_000;
+
+export { Lobby } from './lobby.js';
 
 export class MatchRoom implements DurableObject {
   /**
@@ -80,8 +84,9 @@ export class MatchRoom implements DurableObject {
 
     server.accept();
 
+    const name = sanitizeName(new URL(request.url).searchParams.get('name'));
     const transport = webSocketTransport(server as unknown as WebSocketLike);
-    const slot = this.room.join(transport);
+    const slot = this.room.join(transport, name);
 
     if (slot === null) {
       // `join` already sent a `full` message and closed the transport.
@@ -120,6 +125,14 @@ export default {
 
     if (url.pathname === '/health') {
       return new Response('ok', { status: 200 });
+    }
+
+    // Matchmaking. A single object holds the queue, which is what makes
+    // "is anyone waiting? take them" safe without a lock: a Durable Object
+    // handles one request at a time, so two simultaneous arrivals cannot
+    // interleave.
+    if (url.pathname === '/lobby') {
+      return env.LOBBY.get(env.LOBBY.idFromName('global')).fetch(request);
     }
 
     if (url.pathname !== '/ws') {

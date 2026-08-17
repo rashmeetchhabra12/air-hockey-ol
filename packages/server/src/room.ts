@@ -1,5 +1,6 @@
 import {
   jsonCodec,
+  sanitizeName,
   snapshotFromState,
   wireSize,
   type Codec,
@@ -73,6 +74,8 @@ interface Session {
   slot: number;
   transport: Transport;
   stats: ClientStats;
+  /** Display name, already sanitised by the caller. */
+  name: string;
 }
 
 /**
@@ -139,7 +142,20 @@ export class GameRoom {
    * @returns the assigned slot, or `null` if the room is full — in which case
    *          the caller is told so and the transport is closed.
    */
-  join(transport: Transport): number | null {
+  /**
+   * Names of the seated players, indexed by slot. Empty string for a free seat.
+   */
+  getRoster(): string[] {
+    return this.sessions.map((s) => s?.name ?? '');
+  }
+
+  join(transport: Transport, name = 'Player'): number | null {
+    // Sanitised here as well as at the edge. The room is what broadcasts the
+    // roster, so it is the room's job to guarantee the value is encodable —
+    // an over-long name would otherwise be refused by the codec at the far end
+    // and the roster would silently never arrive.
+    const safeName = sanitizeName(name);
+
     const slot = this.sessions.indexOf(null);
     if (slot === -1) {
       this.sendTo(transport, { t: 'full' }, null);
@@ -150,6 +166,7 @@ export class GameRoom {
     const session: Session = {
       slot,
       transport,
+      name: safeName,
       stats: {
         slot,
         bytesSent: 0,
@@ -181,6 +198,9 @@ export class GameRoom {
       session,
     );
 
+    // Everyone learns who is present, including the peer who just arrived.
+    this.broadcastRoster();
+
     return slot;
   }
 
@@ -201,6 +221,22 @@ export class GameRoom {
       paddle.targetY = paddle.y;
       paddle.vx = 0;
       paddle.vy = 0;
+    }
+
+    this.broadcastRoster();
+  }
+
+  /**
+   * Announce who is in the room.
+   *
+   * Sent on arrival and departure only. Names never ride in a snapshot: those
+   * go out twenty times a second and are delta-encoded down to tens of bytes,
+   * and a value that changes once per connection has no business in them.
+   */
+  private broadcastRoster(): void {
+    const names = this.getRoster();
+    for (const session of this.sessions) {
+      if (session) this.sendTo(session.transport, { t: 'roster', names }, session);
     }
   }
 

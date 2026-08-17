@@ -252,6 +252,135 @@
       .toggle input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
       .toggle:has(input:checked) { color: var(--text); }
 
+      /* ------------------------------------------------------------ start */
+
+      #start {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(120% 90% at 50% 0%, #101c28 0%, var(--bg) 62%);
+        padding: 20px;
+      }
+
+      #start.hidden { display: none; }
+
+      .card {
+        width: min(420px, 100%);
+        border: 1px solid var(--edge);
+        border-radius: 12px;
+        background: var(--panel);
+        padding: 26px 24px 22px;
+      }
+
+      .card h1 {
+        margin: 0;
+        font: 650 21px/1.2 ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .card .sub {
+        margin: 8px 0 20px;
+        font: 500 12.5px/1.55 ui-sans-serif, system-ui, sans-serif;
+        color: var(--dim);
+      }
+
+      .field {
+        display: block;
+        font: 700 9px/1 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--dim);
+        margin-bottom: 7px;
+      }
+
+      #name {
+        width: 100%;
+        background: var(--bg);
+        border: 1px solid var(--edge);
+        border-radius: 6px;
+        padding: 10px 12px;
+        color: var(--text);
+        font: 500 14px/1.2 ui-sans-serif, system-ui, sans-serif;
+      }
+
+      #name:focus-visible { outline: 1px solid var(--accent-dim); border-color: var(--accent-dim); }
+
+      .choices { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+
+      .choices button {
+        width: 100%;
+        padding: 11px 14px;
+        border-radius: 7px;
+        border: 1px solid var(--edge);
+        background: #111a25;
+        color: var(--text);
+        font: 600 13px/1 ui-sans-serif, system-ui, sans-serif;
+        cursor: pointer;
+        transition: border-color 120ms ease, background 120ms ease;
+      }
+
+      .choices button:hover { border-color: var(--accent-dim); background: #16222f; }
+
+      .choices .primary {
+        background: rgba(34, 211, 238, 0.14);
+        border-color: var(--accent-dim);
+        color: var(--accent);
+      }
+
+      .choices .quiet { color: var(--muted); font-weight: 500; }
+
+      .note {
+        margin: 16px 0 0;
+        font: 500 11px/1.5 ui-sans-serif, system-ui, sans-serif;
+        color: var(--dim);
+      }
+
+      /* -------------------------------------------------------- searching */
+
+      #searching {
+        display: none;
+        position: absolute;
+        top: 16px;
+        right: 18px;
+        align-items: center;
+        gap: 9px;
+        padding: 7px 11px;
+        border: 1px solid var(--edge);
+        border-radius: 999px;
+        background: rgba(11, 17, 26, 0.9);
+        font: 500 11.5px/1 ui-sans-serif, system-ui, sans-serif;
+        color: var(--muted);
+      }
+
+      #searching.visible { display: flex; }
+
+      .pulse {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: pulse 1.3s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 0.25; transform: scale(0.8); }
+        50%      { opacity: 1;    transform: scale(1.15); }
+      }
+
+      #searching-cancel {
+        background: none;
+        border: none;
+        color: var(--dim);
+        cursor: pointer;
+        font: 500 11px/1 ui-sans-serif, system-ui, sans-serif;
+        text-decoration: underline;
+        padding: 0;
+      }
+
+      #searching-cancel:hover { color: var(--text); }
+
       @media (max-width: 900px) {
         #controls { flex-wrap: wrap; gap: 12px 0; padding: 10px 12px; }
         .group { padding: 0 12px; }
@@ -268,6 +397,31 @@
     </style>
   </head>
   <body>
+    <div id="start">
+      <div class="card">
+        <h1>Air Hockey</h1>
+        <p class="sub">
+          Real-time netcode: client-side prediction, server reconciliation and
+          lag compensation, running live in this page.
+        </p>
+
+        <label class="field" for="name">Your name</label>
+        <input id="name" type="text" maxlength="16" autocomplete="off"
+               spellcheck="false" placeholder="Player" />
+
+        <div class="choices">
+          <button id="play-human" class="primary">Play vs human</button>
+          <button id="play-bot">Play vs bot</button>
+          <button id="watch" class="quiet">Watch two bots</button>
+        </div>
+
+        <p class="note" id="start-note">
+          Playing a human needs a second person online. You will play the bot
+          while we look for one.
+        </p>
+      </div>
+    </div>
+
     <div id="app">
       <div id="stage">
         <canvas id="canvas"></canvas>
@@ -290,6 +444,12 @@
         </div>
 
         <div id="banner"></div>
+
+        <div id="searching">
+          <span class="pulse"></span>
+          <span id="searching-text">Looking for an opponent…</span>
+          <button id="searching-cancel">cancel</button>
+        </div>
       </div>
 
       <div id="controls">

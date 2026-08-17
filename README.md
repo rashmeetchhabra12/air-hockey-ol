@@ -6,10 +6,13 @@ Two-player air hockey over WebSockets, built to demonstrate real-time state
 synchronisation: client-side prediction, server reconciliation, lag
 compensation, and transient authority over a contested object.
 
-The page opens straight into a match between two bots — it hosts its own
-authoritative room, simulated network, and both clients, so there is nothing to
-wait for and nobody to wait for. Drag **Latency** to 250 ms and toggle
-**Netcode** off and on.
+Pick a name and choose an opponent. **Play vs bot** and **Watch two bots** run
+entirely in the page — it hosts its own authoritative room, simulated network,
+and both clients, so there is nothing to wait for. **Play vs human** queues you
+for matchmaking *while you play the bot*, and swaps you across when someone is
+found.
+
+Drag **Latency** to 250 ms and toggle **Netcode** off and on.
 
 > **Status: P9 of 11 — deployed.** Prediction, reconciliation, interpolation, a headless
 > measurement harness, all three puck strategies, lag compensation, a binary
@@ -302,6 +305,25 @@ is TCP and no snapshot is ever missing. That is a dividend from the transport
 choice worth naming beside its cost: the same reliability that produces
 head-of-line blocking is what makes delta encoding a bitmask rather than a
 subsystem.
+
+**Matchmaking is a queue, not a head-count.** The tempting design — count who
+is online and pair them if the number is even — breaks on the cases that
+actually happen: someone leaves mid-count, two people arrive in the same
+millisecond, a player is paired with a tab that has already closed. A queue
+needs none of that arithmetic, and parity falls out for free: an odd number of
+players means exactly one person is waiting, by definition.
+
+A Durable Object suits it unusually well because it is **single-threaded**.
+"Is anyone waiting? Take them" cannot interleave with another player doing the
+same thing, so the race that would need a lock elsewhere cannot occur.
+[A test](packages/harness/verify-matchmaking.ts) fires four players at the lobby
+simultaneously and checks they form exactly two matches with nobody
+double-booked.
+
+The lobby also never touches the match — it hands out a room name and steps
+back. That is deliberate: a Durable Object is created wherever it is first
+accessed, so a lobby that opened the room itself would pin every match to the
+lobby's region rather than to one of the players'.
 
 **Authority is derived, not claimed.** The server simulates all the physics, so
 it already knows where the puck is and who is near it. A protocol where clients

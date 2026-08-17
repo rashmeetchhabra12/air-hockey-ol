@@ -5,9 +5,8 @@
   "type": "module",
   "description": "Cloudflare Durable Object adapter: hosts one GameRoom per match.",
   "scripts": {
-    "dev": "wrangler dev --port 8787",
-    "deploy": "wrangler deploy",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@ah/protocol": "*",

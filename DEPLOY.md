@@ -36,7 +36,7 @@ The client must be built first, because the Worker serves its output.
 npx wrangler login                      # opens a browser; one time only
 npm install
 npm run build -w @ah/client
-npx wrangler deploy -c packages/worker/wrangler.toml
+npm run deploy          # builds the client, then deploys
 ```
 
 That prints a URL like `https://air-hockey.<your-subdomain>.workers.dev`.
@@ -65,13 +65,14 @@ To redeploy automatically on every push, connect the repo under
 | Setting | Value |
 |---|---|
 | Build command | `npm install && npm run build -w @ah/client` |
-| Deploy command | `npx wrangler deploy -c packages/worker/wrangler.toml` |
+| Deploy command | `npx wrangler deploy` *(the default — leave it alone)* |
 | Root directory | *(leave blank — the repo root)* |
 
-The deploy command is the part worth getting right. A bare `npx wrangler deploy`
-runs from the repository root, finds no configuration there, and fails with
-*"Missing entry-point to Worker script or to assets directory"* — the build
-having already succeeded.
+`wrangler.toml` sits at the repository root precisely so the default deploy
+command works. Nested inside a package it is invisible to Workers Builds, and
+the deploy fails with *"Missing entry-point to Worker script or to assets
+directory"* — after the build has already succeeded, which reads like a build
+problem and is not one.
 
 `VITE_SERVER_URL` is not needed: the client defaults to its own origin in
 production. Set it only to point a deployment at a *different* server.

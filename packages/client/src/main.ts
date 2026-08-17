@@ -140,6 +140,21 @@ function createLocal(mode: 'spectate' | 'bot'): ActiveMatch {
   };
 }
 
+/**
+ * Where to look for the game server when nothing says otherwise.
+ *
+ * In production the page is served by the same Worker that hosts the room, so
+ * the socket goes back to wherever the page came from — no build-time
+ * configuration, and nothing to keep in sync when the deployment moves. During
+ * local development the client is on Vite's port and the worker on wrangler's,
+ * so it falls back to the local worker.
+ */
+function defaultServerUrl(): string {
+  const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (local) return 'ws://127.0.0.1:8787';
+  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+}
+
 function createOnline(): ActiveMatch {
   const predictor = new Predictor(0);
   const buffer = new SnapshotBuffer();
@@ -157,8 +172,7 @@ function createOnline(): ActiveMatch {
    * Only human-vs-human needs any of this — spectate and vs-bot host their own
    * room in the page — so a deployment with no worker at all still works.
    */
-  const base =
-    params.get('server') ?? import.meta.env['VITE_SERVER_URL'] ?? 'ws://127.0.0.1:8787';
+  const base = params.get('server') ?? import.meta.env['VITE_SERVER_URL'] ?? defaultServerUrl();
   const url = `${base}/ws?room=${encodeURIComponent(room)}${useJsonCodec ? '&codec=json' : ''}`;
 
   const client = new GameClient({

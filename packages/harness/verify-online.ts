@@ -124,10 +124,23 @@ const pinger = setInterval(() => {
   for (const peer of [a, b]) peer.session.sendPing();
 }, 1000);
 
+// Sampled across the run, not read at the end. Paddles are constantly moving,
+// so a single final reading can catch one passing through its home position and
+// report a match that never started.
+let maxAwayFromHome0 = 0;
+let maxAwayFromHome1 = 0;
+const watcher = setInterval(() => {
+  const seen = a.buffer.newest();
+  if (!seen) return;
+  maxAwayFromHome0 = Math.max(maxAwayFromHome0, Math.abs(seen.pads[0]![0] - 200));
+  maxAwayFromHome1 = Math.max(maxAwayFromHome1, Math.abs(seen.pads[1]![0] - 800));
+}, 50);
+
 const snapsAtStart = a.snapshots;
 await new Promise((r) => setTimeout(r, RUN_MS));
 clearInterval(loop);
 clearInterval(pinger);
+clearInterval(watcher);
 
 const rate = ((a.snapshots - snapsAtStart) / RUN_MS) * 1000;
 check('snapshots arrive at ~20 Hz', rate > 16 && rate < 24, `${rate.toFixed(1)} Hz`);
@@ -140,9 +153,9 @@ check('both see the same match', Math.abs(seenByA.tick - seenByB.tick) < 20, `ti
 check('scores agree', JSON.stringify(seenByA.score) === JSON.stringify(seenByB.score), `${seenByA.score} vs ${seenByB.score}`);
 
 check(
-  'each paddle moved from its home position',
-  Math.abs(seenByA.pads[0]![0] - 200) > 30 && Math.abs(seenByA.pads[1]![0] - 800) > 30,
-  `x=${seenByA.pads[0]![0].toFixed(0)} / ${seenByA.pads[1]![0].toFixed(0)}`,
+  'each paddle ranged well away from home during the match',
+  maxAwayFromHome0 > 60 && maxAwayFromHome1 > 60,
+  `max travel ${maxAwayFromHome0.toFixed(0)} / ${maxAwayFromHome1.toFixed(0)} units`,
 );
 check('paddles stayed in their own halves', seenByA.pads[0]![0] < 500 && seenByA.pads[1]![0] > 500);
 check('the puck is being played', seenByA.touch >= 0 || (seenByA.score[0] ?? 0) + (seenByA.score[1] ?? 0) > 0);

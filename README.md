@@ -41,9 +41,8 @@ npm run typecheck     # all packages, including the two Worker ones
 npm run measure       # regenerate MEASUREMENTS.md (add -- --seconds 60 for a longer run)
 ```
 
-Deployment steps are in [DEPLOY.md](DEPLOY.md). The client is static and hosts
-its own room, so the demo works with no server; the worker is only needed for
-human-vs-human.
+Deployment steps are in [DEPLOY.md](DEPLOY.md). One Worker serves the built
+client and runs the game room, so the page and its socket share an origin.
 
 ## Layout
 

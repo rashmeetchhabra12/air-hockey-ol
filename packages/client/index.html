@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Air Hockey Netcode</title>
+    <meta
+      name="description"
+      content="Real-time multiplayer netcode: client-side prediction, server reconciliation, and lag compensation, running live in your browser."
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070a0f;
+        --panel: #0b111a;
+        --edge: #1a2534;
+        --edge-soft: #131c27;
+        --text: #e6edf5;
+        --muted: #64748b;
+        --dim: #47566b;
+        --accent: #22d3ee;
+        --accent-dim: #0e7490;
+        --warn: #facc15;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        overscroll-behavior: none;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      #app { display: flex; flex-direction: column; height: 100%; }
+
+      /* ---------------------------------------------------------------- stage */
+
+      #stage {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+        touch-action: none;
+        cursor: none;
+      }
+
+      canvas { display: block; width: 100%; height: 100%; }
+
+      /* The context a first-time visitor needs: what this is, in one line. */
+      #titlebar {
+        position: absolute;
+        top: 16px;
+        left: 18px;
+        pointer-events: none;
+        max-width: 60%;
+      }
+
+      #titlebar h1 {
+        margin: 0;
+        font: 650 15px/1.2 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.01em;
+        color: var(--text);
+      }
+
+      #titlebar p {
+        margin: 3px 0 0;
+        font: 500 11.5px/1.45 ui-sans-serif, system-ui, sans-serif;
+        color: var(--dim);
+      }
+
+      #hint {
+        display: block;
+        margin-top: 7px;
+        font: 500 11.5px/1.4 ui-sans-serif, system-ui, sans-serif;
+        color: var(--accent);
+      }
+
+      /*
+       * Engineering telemetry, hidden until asked for.
+       *
+       * "One demo, two layers": the default view has to be legible to someone
+       * who has never heard of reconciliation, and this is not that. It lives
+       * behind the Debug switch.
+       */
+      #hud {
+        display: none;
+        position: absolute;
+        left: 18px;
+        bottom: 16px;
+        gap: 6px 18px;
+        flex-wrap: wrap;
+        max-width: calc(100% - 36px);
+        font: 500 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+        color: var(--muted);
+        pointer-events: none;
+      }
+
+      #hud.visible { display: flex; }
+      #hud b { color: var(--text); font-weight: 600; }
+
+      #banner {
+        display: none;
+        position: absolute;
+        top: 16px;
+        right: 18px;
+        padding: 6px 11px;
+        border: 1px solid var(--warn);
+        border-radius: 5px;
+        color: var(--warn);
+        background: rgba(250, 204, 21, 0.08);
+        font: 700 10.5px/1 ui-monospace, "SF Mono", Menlo, monospace;
+        letter-spacing: 0.07em;
+        pointer-events: none;
+      }
+
+      /* ------------------------------------------------------------- controls */
+
+      #controls {
+        border-top: 1px solid var(--edge);
+        background: var(--panel);
+        padding: 12px 18px;
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+      }
+
+      .group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 20px;
+        border-left: 1px solid var(--edge-soft);
+        justify-content: center;
+      }
+
+      .group:first-child { padding-left: 0; border-left: none; }
+
+      .group-label {
+        font: 700 9px/1 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+
+      .group.grow { flex: 1; min-width: 0; }
+
+      /* The hero interaction, weighted like one. */
+      #netcode-group { padding-right: 22px; }
+
+      .switch {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .switch input { position: absolute; opacity: 0; pointer-events: none; }
+
+      .track {
+        position: relative;
+        width: 50px;
+        height: 27px;
+        border-radius: 999px;
+        background: #1b2534;
+        border: 1px solid var(--edge);
+        transition: background 140ms ease, border-color 140ms ease;
+        flex: none;
+      }
+
+      .track::after {
+        content: '';
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 19px;
+        height: 19px;
+        border-radius: 50%;
+        background: var(--dim);
+        transition: transform 140ms ease, background 140ms ease;
+      }
+
+      .switch input:checked + .track {
+        background: rgba(34, 211, 238, 0.18);
+        border-color: var(--accent-dim);
+      }
+
+      .switch input:checked + .track::after {
+        transform: translateX(23px);
+        background: var(--accent);
+        box-shadow: 0 0 12px rgba(34, 211, 238, 0.65);
+      }
+
+      .switch-text {
+        font: 700 12px/1 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.06em;
+        color: var(--dim);
+        min-width: 26px;
+      }
+
+      .switch input:checked ~ .switch-text { color: var(--accent); }
+
+      select {
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--edge);
+        border-radius: 5px;
+        padding: 5px 7px;
+        font: 500 12px/1.3 ui-sans-serif, system-ui, sans-serif;
+        cursor: pointer;
+        width: 100%;
+      }
+
+      select:focus-visible { outline: 1px solid var(--accent-dim); }
+
+      .selects { display: flex; gap: 8px; }
+      .selects > * { min-width: 132px; }
+
+      .sliders { display: flex; gap: 18px; }
+      .slider { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+      .slider label {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font: 500 10.5px/1 ui-sans-serif, system-ui, sans-serif;
+        color: var(--muted);
+      }
+
+      .slider label span { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent);
+        height: 16px;
+      }
+
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: 500 11.5px/1 ui-sans-serif, system-ui, sans-serif;
+        color: var(--muted);
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+      }
+
+      .toggle input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+      .toggle:has(input:checked) { color: var(--text); }
+
+      @media (max-width: 900px) {
+        #controls { flex-wrap: wrap; gap: 12px 0; padding: 10px 12px; }
+        .group { padding: 0 12px; }
+        .group.grow { flex-basis: 100%; border-left: none; padding-left: 0; }
+        #titlebar { max-width: calc(100% - 36px); }
+        .selects > * { min-width: 0; }
+      }
+
+      @media (max-width: 560px) {
+        #titlebar p { display: none; }
+        .sliders { gap: 10px; }
+        #hud { font-size: 10px; gap: 4px 12px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="stage">
+        <canvas id="canvas"></canvas>
+
+        <div id="titlebar">
+          <h1>Real-time multiplayer netcode</h1>
+          <p>Client-side prediction, server reconciliation, and lag compensation &mdash; running live in this page.</p>
+          <strong id="hint">Two bots playing in your browser.</strong>
+        </div>
+
+        <div id="hud">
+          <span>mode <b id="hud-state">-</b></span>
+          <span>rtt <b id="hud-rtt">-</b></span>
+          <span>tick <b id="hud-tick">-</b></span>
+          <span>unacked <b id="hud-unacked">-</b></span>
+          <span>err <b id="hud-error">-</b></span>
+          <span>puck err <b id="hud-puckerr">-</b></span>
+          <span>puck owner <b id="hud-owner">-</b></span>
+          <span>corrections <b id="hud-corrections">-</b></span>
+        </div>
+
+        <div id="banner"></div>
+      </div>
+
+      <div id="controls">
+        <div class="group" id="netcode-group">
+          <span class="group-label">Netcode</span>
+          <label class="switch" for="netcode">
+            <input id="netcode" type="checkbox" checked />
+            <span class="track"></span>
+            <span class="switch-text" id="netcode-text">ON</span>
+          </label>
+        </div>
+
+        <div class="group">
+          <span class="group-label">Match</span>
+          <div class="selects">
+            <select id="mode" aria-label="Mode">
+              <option value="spectate">Watch two bots</option>
+              <option value="bot">Play vs bot</option>
+              <option value="online">Play vs human</option>
+            </select>
+            <select id="puck" aria-label="Puck strategy">
+              <option value="interpolate">Puck A &mdash; interpolate</option>
+              <option value="predict" selected>Puck B &mdash; predict</option>
+              <option value="authority">Puck C &mdash; authority</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="group grow">
+          <span class="group-label">Simulated network</span>
+          <div class="sliders">
+            <div class="slider">
+              <label for="rtt">Latency <span id="rtt-value">0 ms</span></label>
+              <input id="rtt" type="range" min="0" max="500" step="10" value="0" />
+            </div>
+            <div class="slider">
+              <label for="jitter">Jitter <span id="jitter-value">0 ms</span></label>
+              <input id="jitter" type="range" min="0" max="150" step="5" value="0" />
+            </div>
+            <div class="slider">
+              <label for="loss">Loss <span id="loss-value">0%</span></label>
+              <input id="loss" type="range" min="0" max="25" step="1" value="0" />
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <span class="group-label">Inspect</span>
+          <label class="toggle" for="debug">
+            <input id="debug" type="checkbox" />
+            Debug overlay
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "baseUrl": "../..",
+    "paths": {
+      "@ah/sim": ["packages/sim/src/index.ts"],
+      "@ah/protocol": ["packages/protocol/src/index.ts"],
+      "@ah/netcode": ["packages/netcode/src/index.ts"],
+      "@ah/bot": ["packages/bot/src/index.ts"],
+      "@ah/server": ["packages/server/src/index.ts"],
+      "@ah/server/loop": ["packages/server/src/loop.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "vite.config.ts"]
+}

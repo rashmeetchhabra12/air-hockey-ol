@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "baseUrl": "../..",
+    "paths": {
+      "@ah/sim": ["packages/sim/src/index.ts"],
+      "@ah/protocol": ["packages/protocol/src/index.ts"],
+      "@ah/netcode": ["packages/netcode/src/index.ts"],
+      "@ah/server": ["packages/server/src/index.ts"],
+      "@ah/server/loop": ["packages/server/src/loop.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

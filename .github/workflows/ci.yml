@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      # Two passes: the root project, plus the Worker packages, which need
+      # Cloudflare's globals and cannot share a lib configuration with the DOM.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Typecheck client
+        run: npx tsc -p packages/client/tsconfig.json
+
+      - name: Test
+        run: npm test
+
+      - name: Build client
+        run: npm run build -w @ah/client
+
+      # The measurement harness is deterministic, so this is a real regression
+      # gate rather than a report: if prediction stops converging or the netcode
+      # stops beating the no-netcode path, the assertions in
+      # packages/harness/test/scenario.test.ts fail above. This step publishes
+      # the numbers so a change's effect on them is visible in the PR.
+      - name: Measure
+        run: npm run measure -- --seconds 15 > measurements.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: measurements
+          path: measurements.md

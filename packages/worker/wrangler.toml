@@ -1,0 +1,12 @@
+name = "air-hockey"
+main = "src/index.ts"
+compatibility_date = "2025-07-18"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "MatchRoom"
+
+# SQLite-backed Durable Objects are the class available on the free plan.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MatchRoom"]

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    // Workers types replace the DOM lib; mixing the two produces conflicting
+    // globals, which is why this package is typechecked separately from the root.
+    "types": ["@cloudflare/workers-types"],
+    "baseUrl": "../..",
+    "paths": {
+      "@ah/sim": ["packages/sim/src/index.ts"],
+      "@ah/protocol": ["packages/protocol/src/index.ts"],
+      "@ah/server": ["packages/server/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

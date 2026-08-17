@@ -1,0 +1,22 @@
+{
+  "name": "@ah/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser client: rendering, input, and networking.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ah/bot": "*",
+    "@ah/netcode": "*",
+    "@ah/protocol": "*",
+    "@ah/server": "*",
+    "@ah/sim": "*"
+  },
+  "devDependencies": {
+    "vite": "^6.0.7"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "netcode-air-hockey",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Real-time multiplayer air hockey: client-side prediction, server reconciliation, and transient puck authority over WebSockets.",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json && tsc -p packages/worker/tsconfig.json && tsc -p packages/spike-do/tsconfig.json",
+    "dev:server": "npm run dev -w @ah/worker",
+    "dev:client": "npm run dev -w @ah/client",
+    "measure": "npm run measure -w @ah/harness --",
+    "verify:online": "npm run verify:online -w @ah/harness"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

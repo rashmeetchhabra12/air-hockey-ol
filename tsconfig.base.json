@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ah/sim": ["packages/sim/src/index.ts"],
+      "@ah/protocol": ["packages/protocol/src/index.ts"],
+      "@ah/netcode": ["packages/netcode/src/index.ts"],
+      "@ah/bot": ["packages/bot/src/index.ts"],
+      "@ah/server": ["packages/server/src/index.ts"],
+      "@ah/server/loop": ["packages/server/src/loop.ts"]
+    }
+  }
+}

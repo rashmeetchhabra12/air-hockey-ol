@@ -1,0 +1,15 @@
+{
+  "name": "@ah/bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scripted opponent. Predicts the puck by rolling the real simulation forward.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ah/sim": "*"
+  }
+}

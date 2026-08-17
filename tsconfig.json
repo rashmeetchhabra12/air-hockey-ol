@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "vitest.config.ts"],
+  "exclude": [
+    "node_modules",
+    "**/dist",
+    // Worker packages need @cloudflare/workers-types, whose globals conflict
+    // with the DOM lib. They are typechecked by their own tsconfig instead —
+    // see `npm run typecheck` in the root package.
+    "packages/worker",
+    "packages/spike-do"
+  ]
+}

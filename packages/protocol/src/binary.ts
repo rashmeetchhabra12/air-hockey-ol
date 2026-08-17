@@ -62,6 +62,7 @@ const G_TOUCH = 1 << 5;
 const G_OWNER = 1 << 6;
 const G_ACKS = 1 << 7;
 const G_DEPTH = 1 << 8;
+const G_WINNER = 1 << 9;
 
 /** Keyframe cadence, in snapshots. One per second at 20 Hz. */
 const KEYFRAME_INTERVAL = 20;
@@ -196,6 +197,7 @@ function cloneSnapshot(s: WireSnapshot): WireSnapshot {
     tgts: s.tgts.map((p) => [p[0], p[1]] as [number, number]),
     score: s.score.slice(),
     frz: s.frz,
+    win: s.win,
     touch: s.touch,
     touchTick: s.touchTick,
     own: s.own,
@@ -253,6 +255,7 @@ export function createBinaryCodec(): Codec & { forceKeyframe(): void } {
     }
     if (!base || snap.score.some((v, i) => v !== base.score[i])) mask |= G_SCORE;
     if (!base || snap.frz !== base.frz) mask |= G_FREEZE;
+    if (!base || snap.win !== base.win) mask |= G_WINNER;
     if (!base || snap.touch !== base.touch || snap.touchTick !== base.touchTick) mask |= G_TOUCH;
     if (!base || snap.own !== base.own || snap.ownEp !== base.ownEp) mask |= G_OWNER;
     if (!base || snap.acks.some((v, i) => v !== base.acks[i])) mask |= G_ACKS;
@@ -279,6 +282,7 @@ export function createBinaryCodec(): Codec & { forceKeyframe(): void } {
     }
     if (mask & G_SCORE) for (let i = 0; i < PLAYER_COUNT; i++) w.u8(snap.score[i] ?? 0);
     if (mask & G_FREEZE) w.u8(snap.frz);
+    if (mask & G_WINNER) w.i8(snap.win);
     if (mask & G_TOUCH) {
       w.i8(snap.touch);
       w.i32(snap.touchTick);
@@ -315,6 +319,7 @@ export function createBinaryCodec(): Codec & { forceKeyframe(): void } {
           tgts: Array.from({ length: PLAYER_COUNT }, () => [0, 0] as [number, number]),
           score: new Array<number>(PLAYER_COUNT).fill(0),
           frz: 0,
+          win: -1,
           touch: -1,
           touchTick: -1,
           own: -1,
@@ -346,6 +351,7 @@ export function createBinaryCodec(): Codec & { forceKeyframe(): void } {
     }
     if (mask & G_SCORE) for (let i = 0; i < PLAYER_COUNT; i++) snap.score[i] = r.u8();
     if (mask & G_FREEZE) snap.frz = r.u8();
+    if (mask & G_WINNER) snap.win = r.i8();
     if (mask & G_TOUCH) {
       snap.touch = r.i8();
       snap.touchTick = r.i32();

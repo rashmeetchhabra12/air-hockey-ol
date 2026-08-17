@@ -56,6 +56,7 @@ export function hashState(state: GameState): number {
   floats[n++] = state.lastTouchedBy;
   floats[n++] = state.lastTouchTick;
   floats[n++] = state.freezeTicks;
+  floats[n++] = state.winner;
   // Authority feeds back into itself through hysteresis, so it is simulation
   // state rather than a derived readout, and belongs in the fingerprint.
   floats[n++] = state.puckOwner;

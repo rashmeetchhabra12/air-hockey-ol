@@ -1,6 +1,8 @@
 import {
   DT,
   FACEOFF_FREEZE_TICKS,
+  MATCH_OVER_TICKS,
+  WINNING_SCORE,
   PADDLE_MAX_SPEED,
   PADDLE_RADIUS,
   PUCK_FRICTION,
@@ -10,7 +12,7 @@ import {
 import { updatePuckAuthority } from './authority.js';
 import { clamp, length } from './math.js';
 import { advancePuck, containPuck, goalByPosition } from './physics.js';
-import { cloneState, paddleBoundsX } from './state.js';
+import { cloneState, paddleBoundsX, resetPaddlesHome } from './state.js';
 import type { GameState, InputSet, SimEvent } from './types.js';
 
 const PADDLE_MIN_Y = PADDLE_RADIUS;
@@ -131,6 +133,19 @@ export function step(
     // Post-goal pause. Players may reposition, but the puck is dead at centre.
     next.freezeTicks--;
     commitPaddles(next, moves);
+
+    // A finished match rolls straight into a fresh one once the result has been
+    // on screen long enough to read. This fires off `freezeTicks`, which every
+    // client has reconciled long before it reaches zero, so both sides run the
+    // reset on exactly the same tick and nobody sees a correction.
+    if (next.freezeTicks === 0 && next.winner >= 0) {
+      for (let slot = 0; slot < next.score.length; slot++) next.score[slot] = 0;
+      next.winner = -1;
+      next.freezeTicks = FACEOFF_FREEZE_TICKS;
+      resetPuckToCentre(next);
+      resetPaddlesHome(next);
+    }
+
     updatePuckAuthority(next);
     return next;
   }
@@ -155,11 +170,27 @@ export function step(
   commitPaddles(next, moves);
 
   if (scoringSlot >= 0) {
-    next.score[scoringSlot] = (next.score[scoringSlot] ?? 0) + 1;
+    const total = (next.score[scoringSlot] ?? 0) + 1;
+    next.score[scoringSlot] = total;
     next.lastGoalBy = scoringSlot;
     next.lastGoalTick = next.tick;
-    next.freezeTicks = FACEOFF_FREEZE_TICKS;
     resetPuckToCentre(next);
+
+    // Paddles deliberately stay where they are.
+    //
+    // Sending them home here would look tidier, but it would make the local
+    // paddle's position depend on *goal detection*, and a goal depends on the
+    // opponent's paddle — which the client cannot predict. The client would
+    // then teleport its own paddle a tick or two away from the server and eat a
+    // ~100-unit correction on every goal. A face-off reset is only safe when it
+    // is driven by a counter both sides already agree on, which is what the
+    // new-match reset below is.
+    if (total >= WINNING_SCORE) {
+      next.winner = scoringSlot;
+      next.freezeTicks = MATCH_OVER_TICKS;
+    } else {
+      next.freezeTicks = FACEOFF_FREEZE_TICKS;
+    }
   }
 
   // Last, because ownership is decided from where the puck and paddles finally

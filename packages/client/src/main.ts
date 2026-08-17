@@ -14,7 +14,7 @@ import {
   type WireSnapshot,
 } from '@ah/protocol';
 import { FixedTimestepLoop } from '@ah/server/loop';
-import { TICK_RATE } from '@ah/sim';
+import { TICK_RATE, WINNING_SCORE } from '@ah/sim';
 
 import { LobbyClient } from './lobby.js';
 import { LocalMatch } from './local.js';
@@ -70,7 +70,16 @@ const el = {
   searchingCancel: document.querySelector<HTMLButtonElement>('#searching-cancel')!,
   hud: document.querySelector<HTMLElement>('#hud')!,
   netcodeText: document.querySelector<HTMLElement>('#netcode-text')!,
+  lab: document.querySelector<HTMLElement>('#lab')!,
+  labToggle: document.querySelector<HTMLButtonElement>('#lab-toggle')!,
+  ptsLeft: document.querySelector<HTMLElement>('#pts-left')!,
+  ptsRight: document.querySelector<HTMLElement>('#pts-right')!,
+  nameLeft: document.querySelector<HTMLElement>('#name-left')!,
+  nameRight: document.querySelector<HTMLElement>('#name-right')!,
+  target: document.querySelector<HTMLElement>('#target')!,
 };
+
+el.target.textContent = `First to ${WINNING_SCORE}`;
 
 // ---------------------------------------------------------------------------
 // Simulated network
@@ -376,6 +385,23 @@ el.debug.addEventListener('change', () => {
   el.hud.classList.toggle('visible', showDebug);
 });
 
+/**
+ * The netcode lab.
+ *
+ * Latency sliders and strategy switches are the *subject* of the project, but
+ * they are not part of playing a match, and a player who only wants to play
+ * should not have to look at them. One click away, and `?lab=1` opens the page
+ * with them already showing for a link sent to somebody technical.
+ */
+function setLabOpen(open: boolean): void {
+  el.lab.classList.toggle('open', open);
+  el.labToggle.classList.toggle('on', open);
+  el.labToggle.setAttribute('aria-expanded', String(open));
+  resize();
+}
+
+el.labToggle.addEventListener('click', () => setLabOpen(!el.lab.classList.contains('open')));
+
 el.puck.addEventListener('change', () => {
   puckStrategy = el.puck.value as PuckStrategy;
   // The player asked for the change, so show it immediately rather than
@@ -469,6 +495,7 @@ function buildScene(nowMs: number, deltaMs: number): ViewState | null {
   // a statement about the match, and the authoritative one is the only version
   // every player agrees on.
   const countdown = newest.frz > 0 ? newest.frz / TICK_RATE : 0;
+  const winner = newest.win;
 
   if (!netcodeEnabled || slot === null) {
     // The P1 path: whatever the server last said, drawn directly.
@@ -480,6 +507,7 @@ function buildScene(nowMs: number, deltaMs: number): ViewState | null {
       status: null,
       debug,
       countdown,
+      winner,
       names: active.roster(),
     };
   }
@@ -501,9 +529,35 @@ function buildScene(nowMs: number, deltaMs: number): ViewState | null {
     status: null,
     debug,
     countdown,
+    winner,
     names: active.roster(),
     ...(goalFlash > 0.01 ? { goalFlash: { intensity: goalFlash, slot: goalFlashSlot } } : {}),
   };
+}
+
+/**
+ * Names and score in the top bar.
+ *
+ * DOM rather than canvas: it stays crisp at any device pixel ratio, it is
+ * selectable and screen-readable, and it keeps the playing surface free of
+ * anything that is not the table.
+ *
+ * Written only on change — this runs every frame, and an unconditional
+ * `textContent` write invalidates layout whether or not the value moved.
+ */
+const scoreboard = { left: '', right: '', ptsLeft: '', ptsRight: '' };
+
+function updateScoreboard(scene: ViewState | null): void {
+  const names = scene?.names ?? [];
+  const left = names[0] || 'Blue';
+  const right = names[1] || 'Red';
+  const ptsLeft = String(scene?.score[0] ?? 0);
+  const ptsRight = String(scene?.score[1] ?? 0);
+
+  if (left !== scoreboard.left) el.nameLeft.textContent = scoreboard.left = left;
+  if (right !== scoreboard.right) el.nameRight.textContent = scoreboard.right = right;
+  if (ptsLeft !== scoreboard.ptsLeft) el.ptsLeft.textContent = scoreboard.ptsLeft = ptsLeft;
+  if (ptsRight !== scoreboard.ptsRight) el.ptsRight.textContent = scoreboard.ptsRight = ptsRight;
 }
 
 let lastFrame = performance.now();
@@ -535,6 +589,7 @@ function frame(): void {
   }
 
   const scene = buildScene(now, deltaMs);
+  updateScoreboard(scene);
   view = render(ctx, canvas.width, canvas.height, scene, active.status());
 
   // Skip the readouts entirely while the panel is hidden: it is a dozen DOM
@@ -561,9 +616,11 @@ function frame(): void {
 }
 
 syncConditions();
+const params = new URLSearchParams(location.search);
+if (params.get('lab') === '1') setLabOpen(true);
 resize();
 // `?mode=` skips the start screen, for a link meant to land somewhere specific.
-const requested = new URLSearchParams(location.search).get('mode');
+const requested = params.get('mode');
 if (requested === 'bot' || requested === 'spectate') {
   el.start.classList.add('hidden');
   switchMode(requested);

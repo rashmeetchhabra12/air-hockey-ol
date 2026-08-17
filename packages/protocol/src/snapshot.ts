@@ -29,6 +29,7 @@ export function snapshotFromState(state: GameState, acks: number[]): WireSnapsho
     tgts,
     score: state.score.slice(),
     frz: state.freezeTicks,
+    win: state.winner,
     touch: state.lastTouchedBy,
     touchTick: state.lastTouchTick,
     own: state.puckOwner,
@@ -78,6 +79,7 @@ export function stateFromSnapshot(snap: WireSnapshot, template?: GameState): Gam
   }
 
   state.freezeTicks = snap.frz;
+  state.winner = snap.win;
   state.lastTouchedBy = snap.touch;
   state.lastTouchTick = snap.touchTick;
   state.puckOwner = snap.own;

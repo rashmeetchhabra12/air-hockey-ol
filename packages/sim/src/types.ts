@@ -47,6 +47,8 @@ export interface GameState {
   lastTouchTick: number;
   /** Ticks remaining in the post-goal freeze. Zero during normal play. */
   freezeTicks: number;
+  /** Slot that has won the match, or -1 while it is still being played. */
+  winner: number;
   /**
    * Slot currently entitled to predict the puck, or -1 for nobody.
    *

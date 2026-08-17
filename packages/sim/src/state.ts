@@ -7,10 +7,11 @@ import {
 } from './config.js';
 import type { GameState, Paddle } from './types.js';
 
-/** Home position for a slot: one fifth in from that player's own end wall. */
+/** Face-off position for a slot, near that player's own goal. */
 export function paddleHome(slot: number): { x: number; y: number } {
+  // Close to their own goal, the way players actually line up for a face-off.
   return {
-    x: slot === SLOT_LEFT ? RINK_WIDTH * 0.2 : RINK_WIDTH * 0.8,
+    x: slot === SLOT_LEFT ? RINK_WIDTH * 0.13 : RINK_WIDTH * 0.87,
     y: RINK_HEIGHT / 2,
   };
 }
@@ -41,6 +42,20 @@ function createPaddle(slot: number): Paddle {
   };
 }
 
+/** Move both paddles to their face-off positions. */
+export function resetPaddlesHome(state: GameState): void {
+  for (let slot = 0; slot < state.paddles.length; slot++) {
+    const home = paddleHome(slot);
+    const paddle = state.paddles[slot]!;
+    paddle.x = home.x;
+    paddle.y = home.y;
+    paddle.targetX = home.x;
+    paddle.targetY = home.y;
+    paddle.vx = 0;
+    paddle.vy = 0;
+  }
+}
+
 /** Fresh match state: puck dead at centre, paddles at home, nil-nil. */
 export function createInitialState(): GameState {
   const paddles: Paddle[] = [];
@@ -56,6 +71,7 @@ export function createInitialState(): GameState {
     lastTouchedBy: -1,
     lastTouchTick: -1,
     freezeTicks: 0,
+    winner: -1,
     puckOwner: -1,
     puckOwnerEpoch: 0,
     lastGoalBy: -1,
@@ -93,6 +109,7 @@ export function cloneState(s: GameState): GameState {
     lastTouchedBy: s.lastTouchedBy,
     lastTouchTick: s.lastTouchTick,
     freezeTicks: s.freezeTicks,
+    winner: s.winner,
     puckOwner: s.puckOwner,
     puckOwnerEpoch: s.puckOwnerEpoch,
     lastGoalBy: s.lastGoalBy,
@@ -111,6 +128,7 @@ export function statesEqual(a: GameState, b: GameState): boolean {
     a.lastTouchedBy !== b.lastTouchedBy ||
     a.lastTouchTick !== b.lastTouchTick ||
     a.freezeTicks !== b.freezeTicks ||
+    a.winner !== b.winner ||
     a.puckOwner !== b.puckOwner ||
     a.puckOwnerEpoch !== b.puckOwnerEpoch ||
     a.paddles.length !== b.paddles.length ||

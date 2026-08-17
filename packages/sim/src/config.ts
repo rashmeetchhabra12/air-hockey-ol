@@ -96,6 +96,12 @@ export const TIME_EPSILON = 1e-9;
  */
 export const FACEOFF_FREEZE_TICKS = TICK_RATE * 3;
 
+/** Goals needed to win. */
+export const WINNING_SCORE = 7;
+
+/** How long the result is shown before a fresh match begins. */
+export const MATCH_OVER_TICKS = TICK_RATE * 7;
+
 // ---------------------------------------------------------------------------
 // Puck authority (strategy C)
 // ---------------------------------------------------------------------------

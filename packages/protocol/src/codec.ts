@@ -65,6 +65,7 @@ function decodeSnapshot(o: Record<string, unknown>): WireSnapshot | null {
   if (o['tgts'].length !== o['pads'].length) return null;
   if (!Array.isArray(o['score']) || !o['score'].every(isFiniteNumber)) return null;
   if (!isFiniteNumber(o['frz'])) return null;
+  if (!isFiniteNumber(o['win'])) return null;
   if (!isFiniteNumber(o['touch'])) return null;
   if (!isFiniteNumber(o['touchTick'])) return null;
   if (!isFiniteNumber(o['own'])) return null;
@@ -80,6 +81,7 @@ function decodeSnapshot(o: Record<string, unknown>): WireSnapshot | null {
     tgts: o['tgts'] as Array<[number, number]>,
     score: o['score'] as number[],
     frz: o['frz'],
+    win: o['win'],
     touch: o['touch'],
     touchTick: o['touchTick'],
     own: o['own'],

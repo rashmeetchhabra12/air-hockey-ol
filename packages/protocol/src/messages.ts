@@ -39,6 +39,8 @@ export interface WireSnapshot {
   score: number[];
   /** Remaining post-goal freeze ticks. */
   frz: number;
+  /** Slot that has won, or -1 while the match is live. */
+  win: number;
   /** Slot that last struck the puck, or -1. */
   touch: number;
   /**

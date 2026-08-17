@@ -11,16 +11,20 @@
     <style>
       :root {
         color-scheme: dark;
-        --bg: #070a0f;
-        --panel: #0b111a;
-        --edge: #1a2534;
-        --edge-soft: #131c27;
-        --text: #e6edf5;
-        --muted: #64748b;
-        --dim: #47566b;
-        --accent: #22d3ee;
+        --bg: #080b11;
+        --bg-lift: #0d1219;
+        --panel: #0f151e;
+        --edge: #1e2836;
+        --edge-soft: #161e29;
+        --text: #eaf0f7;
+        --muted: #7d8ea3;
+        --dim: #55677d;
+        --accent: #38bdf8;
         --accent-dim: #0e7490;
+        --blue: #4b9bf0;
+        --red: #ef5350;
         --warn: #facc15;
+        --radius: 12px;
       }
 
       * { box-sizing: border-box; }
@@ -37,6 +41,117 @@
 
       #app { display: flex; flex-direction: column; height: 100%; }
 
+      /* ---------------------------------------------------------------- chrome */
+
+      /*
+       * One slim bar carries everything a player needs mid-match: who is
+       * playing, the score, and the way out. The netcode instrumentation is
+       * deliberately not here — it lives behind the lab button, so the game
+       * reads as a game first.
+       */
+      #topbar {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--edge);
+        background: linear-gradient(180deg, var(--bg-lift), var(--bg));
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+        font: 650 13px/1 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.01em;
+      }
+
+      .brand .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+        flex: none;
+      }
+
+      .brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      /* Scoreboard: the one readout that matters to every visitor. */
+      #scoreboard {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 5px 14px;
+        border: 1px solid var(--edge);
+        border-radius: 999px;
+        background: var(--panel);
+      }
+
+      .side {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .side.right { flex-direction: row-reverse; }
+
+      .chip {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex: none;
+      }
+
+      .side.left  .chip { background: var(--blue); }
+      .side.right .chip { background: var(--red); }
+
+      .who {
+        font: 600 12px/1 ui-sans-serif, system-ui, sans-serif;
+        color: var(--muted);
+        max-width: 96px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pts {
+        font: 700 20px/1 ui-monospace, "SF Mono", Menlo, monospace;
+        font-variant-numeric: tabular-nums;
+        min-width: 16px;
+        text-align: center;
+      }
+
+      #pts-left  { color: var(--blue); }
+      #pts-right { color: var(--red); }
+
+      #target {
+        font: 700 9px/1 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.14em;
+        color: var(--dim);
+        text-transform: uppercase;
+      }
+
+      .bar-right { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+
+      .btn {
+        border: 1px solid var(--edge);
+        background: var(--panel);
+        color: var(--muted);
+        border-radius: 7px;
+        padding: 7px 11px;
+        font: 600 11.5px/1 ui-sans-serif, system-ui, sans-serif;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+      }
+
+      .btn:hover { color: var(--text); border-color: var(--accent-dim); }
+      .btn.on { color: var(--accent); border-color: var(--accent-dim); background: rgba(56, 189, 248, 0.12); }
+
       /* ---------------------------------------------------------------- stage */
 
       #stage {
@@ -45,54 +160,37 @@
         min-height: 0;
         touch-action: none;
         cursor: none;
+        background: radial-gradient(85% 70% at 50% 42%, #131c27 0%, var(--bg) 78%);
       }
 
       canvas { display: block; width: 100%; height: 100%; }
 
-      /* The context a first-time visitor needs: what this is, in one line. */
-      #titlebar {
-        position: absolute;
-        top: 16px;
-        left: 18px;
-        pointer-events: none;
-        max-width: 60%;
-      }
-
-      #titlebar h1 {
-        margin: 0;
-        font: 650 15px/1.2 ui-sans-serif, system-ui, sans-serif;
-        letter-spacing: 0.01em;
-        color: var(--text);
-      }
-
-      #titlebar p {
-        margin: 3px 0 0;
-        font: 500 11.5px/1.45 ui-sans-serif, system-ui, sans-serif;
-        color: var(--dim);
-      }
-
       #hint {
-        display: block;
-        margin-top: 7px;
+        position: absolute;
+        left: 50%;
+        bottom: 14px;
+        transform: translateX(-50%);
         font: 500 11.5px/1.4 ui-sans-serif, system-ui, sans-serif;
-        color: var(--accent);
+        color: var(--dim);
+        pointer-events: none;
+        text-align: center;
+        max-width: 88%;
       }
 
       /*
        * Engineering telemetry, hidden until asked for.
        *
        * "One demo, two layers": the default view has to be legible to someone
-       * who has never heard of reconciliation, and this is not that. It lives
-       * behind the Debug switch.
+       * who has never heard of reconciliation, and this is not that.
        */
       #hud {
         display: none;
         position: absolute;
-        left: 18px;
-        bottom: 16px;
+        left: 16px;
+        bottom: 14px;
         gap: 6px 18px;
         flex-wrap: wrap;
-        max-width: calc(100% - 36px);
+        max-width: calc(100% - 32px);
         font: 500 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
         color: var(--muted);
         pointer-events: none;
@@ -104,8 +202,8 @@
       #banner {
         display: none;
         position: absolute;
-        top: 16px;
-        right: 18px;
+        top: 14px;
+        right: 16px;
         padding: 6px 11px;
         border: 1px solid var(--warn);
         border-radius: 5px;
@@ -116,16 +214,21 @@
         pointer-events: none;
       }
 
-      /* ------------------------------------------------------------- controls */
+      /* ------------------------------------------------------------ netcode lab */
 
-      #controls {
+      /*
+       * The sliders and strategy switches are the portfolio content, not part of
+       * playing a match — so they are one click away rather than always on
+       * screen. Collapsed by default; `?lab=1` opens it for a demo link.
+       */
+      #lab {
+        display: none;
         border-top: 1px solid var(--edge);
         background: var(--panel);
-        padding: 12px 18px;
-        display: flex;
-        align-items: stretch;
-        gap: 0;
+        padding: 12px 16px;
       }
+
+      #lab.open { display: flex; align-items: stretch; }
 
       .group {
         display: flex;
@@ -147,7 +250,6 @@
 
       .group.grow { flex: 1; min-width: 0; }
 
-      /* The hero interaction, weighted like one. */
       #netcode-group { padding-right: 22px; }
 
       .switch {
@@ -184,14 +286,14 @@
       }
 
       .switch input:checked + .track {
-        background: rgba(34, 211, 238, 0.18);
+        background: rgba(56, 189, 248, 0.18);
         border-color: var(--accent-dim);
       }
 
       .switch input:checked + .track::after {
         transform: translateX(23px);
         background: var(--accent);
-        box-shadow: 0 0 12px rgba(34, 211, 238, 0.65);
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.65);
       }
 
       .switch-text {
@@ -207,8 +309,8 @@
         background: var(--bg);
         color: var(--text);
         border: 1px solid var(--edge);
-        border-radius: 5px;
-        padding: 5px 7px;
+        border-radius: 6px;
+        padding: 6px 8px;
         font: 500 12px/1.3 ui-sans-serif, system-ui, sans-serif;
         cursor: pointer;
         width: 100%;
@@ -232,11 +334,7 @@
 
       .slider label span { color: var(--accent); font-variant-numeric: tabular-nums; }
 
-      input[type="range"] {
-        width: 100%;
-        accent-color: var(--accent);
-        height: 16px;
-      }
+      input[type="range"] { width: 100%; accent-color: var(--accent); height: 16px; }
 
       .toggle {
         display: flex;
@@ -252,38 +350,99 @@
       .toggle input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
       .toggle:has(input:checked) { color: var(--text); }
 
-      /* ------------------------------------------------------------ start */
+      /* ------------------------------------------------------------ entry page */
 
       #start {
         position: fixed;
         inset: 0;
         z-index: 10;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: radial-gradient(120% 90% at 50% 0%, #101c28 0%, var(--bg) 62%);
-        padding: 20px;
+        display: grid;
+        place-items: center;
+        overflow: auto;
+        background:
+          radial-gradient(60% 55% at 22% 8%, rgba(56, 189, 248, 0.16) 0%, transparent 60%),
+          radial-gradient(55% 50% at 84% 92%, rgba(239, 83, 80, 0.13) 0%, transparent 60%),
+          var(--bg);
+        padding: 28px 20px;
       }
 
       #start.hidden { display: none; }
 
-      .card {
-        width: min(420px, 100%);
+      /* Two columns: the pitch on the left, the one decision on the right. */
+      .entry {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(320px, 380px);
+        gap: 48px;
+        align-items: center;
+        width: min(940px, 100%);
+      }
+
+      .lede .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 11px;
         border: 1px solid var(--edge);
-        border-radius: 12px;
-        background: var(--panel);
-        padding: 26px 24px 22px;
+        border-radius: 999px;
+        background: rgba(15, 21, 30, 0.8);
+        font: 700 9.5px/1 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--muted);
       }
 
-      .card h1 {
-        margin: 0;
-        font: 650 21px/1.2 ui-sans-serif, system-ui, sans-serif;
+      .lede h1 {
+        margin: 20px 0 0;
+        font: 700 clamp(30px, 4.6vw, 46px)/1.08 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: -0.02em;
       }
 
-      .card .sub {
-        margin: 8px 0 20px;
-        font: 500 12.5px/1.55 ui-sans-serif, system-ui, sans-serif;
+      .lede h1 em {
+        font-style: normal;
+        background: linear-gradient(92deg, var(--accent), #818cf8);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .lede p {
+        margin: 16px 0 0;
+        max-width: 46ch;
+        font: 500 14px/1.65 ui-sans-serif, system-ui, sans-serif;
+        color: var(--muted);
+      }
+
+      .facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 26px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .facts li {
+        padding: 7px 12px;
+        border: 1px solid var(--edge-soft);
+        border-radius: 8px;
+        background: rgba(15, 21, 30, 0.75);
+        font: 500 11.5px/1 ui-sans-serif, system-ui, sans-serif;
         color: var(--dim);
+      }
+
+      .facts li b { color: var(--text); font-weight: 650; }
+
+      .card {
+        border: 1px solid var(--edge);
+        border-radius: 16px;
+        background: linear-gradient(180deg, var(--panel), #0b1017);
+        padding: 24px 22px 20px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      }
+
+      .card h2 {
+        margin: 0 0 18px;
+        font: 650 15px/1.2 ui-sans-serif, system-ui, sans-serif;
       }
 
       .field {
@@ -299,37 +458,48 @@
         width: 100%;
         background: var(--bg);
         border: 1px solid var(--edge);
-        border-radius: 6px;
-        padding: 10px 12px;
+        border-radius: 8px;
+        padding: 11px 12px;
         color: var(--text);
         font: 500 14px/1.2 ui-sans-serif, system-ui, sans-serif;
       }
 
       #name:focus-visible { outline: 1px solid var(--accent-dim); border-color: var(--accent-dim); }
 
-      .choices { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+      .choices { display: flex; flex-direction: column; gap: 9px; margin-top: 18px; }
 
       .choices button {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
         width: 100%;
-        padding: 11px 14px;
-        border-radius: 7px;
+        padding: 12px 14px;
+        border-radius: 9px;
         border: 1px solid var(--edge);
-        background: #111a25;
+        background: #121a24;
         color: var(--text);
-        font: 600 13px/1 ui-sans-serif, system-ui, sans-serif;
+        font: 650 13px/1 ui-sans-serif, system-ui, sans-serif;
         cursor: pointer;
-        transition: border-color 120ms ease, background 120ms ease;
+        text-align: left;
+        transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
       }
 
-      .choices button:hover { border-color: var(--accent-dim); background: #16222f; }
+      .choices button small {
+        font: 500 10.5px/1 ui-sans-serif, system-ui, sans-serif;
+        color: var(--dim);
+      }
+
+      .choices button:hover { border-color: var(--accent-dim); background: #16212e; transform: translateY(-1px); }
 
       .choices .primary {
-        background: rgba(34, 211, 238, 0.14);
+        background: linear-gradient(180deg, rgba(56, 189, 248, 0.22), rgba(56, 189, 248, 0.1));
         border-color: var(--accent-dim);
-        color: var(--accent);
+        color: #d9f3ff;
       }
 
-      .choices .quiet { color: var(--muted); font-weight: 500; }
+      .choices .primary small { color: rgba(217, 243, 255, 0.6); }
+      .choices .quiet { background: transparent; color: var(--muted); font-weight: 600; }
 
       .note {
         margin: 16px 0 0;
@@ -342,14 +512,14 @@
       #searching {
         display: none;
         position: absolute;
-        top: 16px;
-        right: 18px;
+        top: 14px;
+        left: 16px;
         align-items: center;
         gap: 9px;
         padding: 7px 11px;
         border: 1px solid var(--edge);
         border-radius: 999px;
-        background: rgba(11, 17, 26, 0.9);
+        background: rgba(15, 21, 30, 0.92);
         font: 500 11.5px/1 ui-sans-serif, system-ui, sans-serif;
         color: var(--muted);
       }
@@ -381,56 +551,104 @@
 
       #searching-cancel:hover { color: var(--text); }
 
+      @media (max-width: 940px) {
+        .entry { grid-template-columns: 1fr; gap: 30px; }
+        .lede p { max-width: none; }
+      }
+
       @media (max-width: 900px) {
-        #controls { flex-wrap: wrap; gap: 12px 0; padding: 10px 12px; }
+        #lab.open { flex-wrap: wrap; gap: 12px 0; padding: 10px 12px; }
         .group { padding: 0 12px; }
         .group.grow { flex-basis: 100%; border-left: none; padding-left: 0; }
-        #titlebar { max-width: calc(100% - 36px); }
         .selects > * { min-width: 0; }
       }
 
-      @media (max-width: 560px) {
-        #titlebar p { display: none; }
+      @media (max-width: 620px) {
+        #topbar { grid-template-columns: auto 1fr auto; padding: 8px 10px; gap: 8px; }
+        .brand span { display: none; }
+        .who { max-width: 62px; }
+        #target { display: none; }
+        #scoreboard { gap: 10px; padding: 4px 10px; }
         .sliders { gap: 10px; }
         #hud { font-size: 10px; gap: 4px 12px; }
+        #hint { font-size: 10.5px; }
       }
     </style>
   </head>
   <body>
     <div id="start">
-      <div class="card">
-        <h1>Air Hockey</h1>
-        <p class="sub">
-          Real-time netcode: client-side prediction, server reconciliation and
-          lag compensation, running live in this page.
-        </p>
-
-        <label class="field" for="name">Your name</label>
-        <input id="name" type="text" maxlength="16" autocomplete="off"
-               spellcheck="false" placeholder="Player" />
-
-        <div class="choices">
-          <button id="play-human" class="primary">Play vs human</button>
-          <button id="play-bot">Play vs bot</button>
-          <button id="watch" class="quiet">Watch two bots</button>
+      <div class="entry">
+        <div class="lede">
+          <span class="eyebrow">Real-time systems</span>
+          <h1>Air hockey, played across <em>the network</em>.</h1>
+          <p>
+            Both players run the same deterministic simulation. Your paddle moves
+            the instant you do; the server stays the authority and quietly
+            corrects the difference. Turn the netcode off and watch it fall apart.
+          </p>
+          <ul class="facts">
+            <li><b>60 Hz</b> authoritative tick</li>
+            <li><b>Client-side</b> prediction &amp; reconciliation</li>
+            <li><b>Lag compensation</b> by server rewind</li>
+            <li><b>First to 7</b> wins</li>
+          </ul>
         </div>
 
-        <p class="note" id="start-note">
-          Playing a human needs a second person online. You will play the bot
-          while we look for one.
-        </p>
+        <div class="card">
+          <h2>Start a match</h2>
+
+          <label class="field" for="name">Your name</label>
+          <input id="name" type="text" maxlength="16" autocomplete="off"
+                 spellcheck="false" placeholder="Player" />
+
+          <div class="choices">
+            <button id="play-human" class="primary">
+              Play vs human <small>matchmaking</small>
+            </button>
+            <button id="play-bot">
+              Play vs bot <small>instant</small>
+            </button>
+            <button id="watch" class="quiet">
+              Watch two bots <small>no controls</small>
+            </button>
+          </div>
+
+          <p class="note" id="start-note">
+            Playing a human needs a second person online. You will play the bot
+            while we look for one.
+          </p>
+        </div>
       </div>
     </div>
 
     <div id="app">
+      <div id="topbar">
+        <div class="brand">
+          <span class="dot"></span>
+          <span>Air Hockey Netcode</span>
+        </div>
+
+        <div id="scoreboard">
+          <div class="side left">
+            <span class="chip"></span>
+            <span class="who" id="name-left">Blue</span>
+            <span class="pts" id="pts-left">0</span>
+          </div>
+          <span id="target">First to 7</span>
+          <div class="side right">
+            <span class="chip"></span>
+            <span class="who" id="name-right">Red</span>
+            <span class="pts" id="pts-right">0</span>
+          </div>
+        </div>
+
+        <div class="bar-right">
+          <button class="btn" id="lab-toggle">Netcode lab</button>
+        </div>
+      </div>
+
       <div id="stage">
         <canvas id="canvas"></canvas>
-
-        <div id="titlebar">
-          <h1>Real-time multiplayer netcode</h1>
-          <p>Client-side prediction, server reconciliation, and lag compensation &mdash; running live in this page.</p>
-          <strong id="hint">Two bots playing in your browser.</strong>
-        </div>
 
         <div id="hud">
           <span>mode <b id="hud-state">-</b></span>
@@ -450,9 +668,11 @@
           <span id="searching-text">Looking for an opponent…</span>
           <button id="searching-cancel">cancel</button>
         </div>
+
+        <div id="hint">Two bots playing in your browser.</div>
       </div>
 
-      <div id="controls">
+      <div id="lab">
         <div class="group" id="netcode-group">
           <span class="group-label">Netcode</span>
           <label class="switch" for="netcode">

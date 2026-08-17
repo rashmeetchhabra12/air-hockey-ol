@@ -24,7 +24,14 @@ export type {
   Puck,
   SimEvent,
 } from './types.js';
-export { createInitialState, cloneState, statesEqual, paddleHome, paddleBoundsX } from './state.js';
+export {
+  createInitialState,
+  cloneState,
+  statesEqual,
+  paddleHome,
+  paddleBoundsX,
+  resetPaddlesHome,
+} from './state.js';
 export { step, stepMany } from './step.js';
 export { advancePuck, sweepCircleVsCircle, goalByPosition, containPuck } from './physics.js';
 export { computePuckOwner, updatePuckAuthority } from './authority.js';

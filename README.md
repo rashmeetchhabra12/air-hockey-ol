@@ -1,10 +1,17 @@
 # Networked Air Hockey
 
+**Live: <https://air-hockey-ol.rashmeetsingh1012.workers.dev>**
+
 Two-player air hockey over WebSockets, built to demonstrate real-time state
 synchronisation: client-side prediction, server reconciliation, lag
 compensation, and transient authority over a contested object.
 
-> **Status: P8 of 11.** Prediction, reconciliation, interpolation, a headless
+The page opens straight into a match between two bots — it hosts its own
+authoritative room, simulated network, and both clients, so there is nothing to
+wait for and nobody to wait for. Drag **Latency** to 250 ms and toggle
+**Netcode** off and on.
+
+> **Status: P9 of 11 — deployed.** Prediction, reconciliation, interpolation, a headless
 > measurement harness, all three puck strategies, lag compensation, a binary
 > wire protocol, and a scripted bot with a spectator mode that needs no server
 > at all. Next is deployment.

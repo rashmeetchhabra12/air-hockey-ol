@@ -1,5 +1,8 @@
 # Deploying
 
+Live at <https://air-hockey-ol.rashmeetsingh1012.workers.dev>, deployed from
+`main` by Workers Builds.
+
 **One Worker serves everything.** It hosts the built client as static assets and
 runs the authoritative game room, so the page and its WebSocket share an origin.
 That means no build-time server URL to configure and nothing to keep in sync

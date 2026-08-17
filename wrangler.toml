@@ -10,7 +10,10 @@
 # One Worker serves both halves: the built client as static assets, and the
 # authoritative game room as a Durable Object.
 
-name = "air-hockey"
+# Must match the Workers Builds project name, which is what the deployed Worker
+# is actually called. If they differ, a local `npm run deploy` quietly creates a
+# *second* Worker at a different URL instead of updating the live one.
+name = "air-hockey-ol"
 main = "packages/worker/src/index.ts"
 compatibility_date = "2025-07-18"
 

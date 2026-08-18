@@ -19,7 +19,14 @@ import { TICK_RATE, WINNING_SCORE } from '@ah/sim';
 import { LobbyClient } from './lobby.js';
 import { LocalMatch } from './local.js';
 import { GameClient, type ConnectionState } from './net.js';
-import { render, screenToRink, type DebugView, type View, type ViewState } from './render.js';
+import {
+  computeView,
+  render,
+  screenToRink,
+  type DebugView,
+  type View,
+  type ViewState,
+} from './render.js';
 
 /**
  * Entry point.
@@ -72,6 +79,8 @@ const el = {
   netcodeText: document.querySelector<HTMLElement>('#netcode-text')!,
   lab: document.querySelector<HTMLElement>('#lab')!,
   labToggle: document.querySelector<HTMLButtonElement>('#lab-toggle')!,
+  sideLeft: document.querySelector<HTMLElement>('#side-left')!,
+  sideRight: document.querySelector<HTMLElement>('#side-right')!,
   ptsLeft: document.querySelector<HTMLElement>('#pts-left')!,
   ptsRight: document.querySelector<HTMLElement>('#pts-right')!,
   nameLeft: document.querySelector<HTMLElement>('#name-left')!,
@@ -137,11 +146,16 @@ let showDebug = false;
 /**
  * Default puck strategy.
  *
- * B, not C, and measured rather than assumed. At the latency the demo opens on
- * — the slider starts at zero — B's p99 puck error is 56 units against C's 251,
- * because C only holds authority around a seventh of the time there and spends
- * the rest interpolating, inheriting A's tail. C earns its place at high
- * latency, where it is far smoother; it is not the right thing to show first.
+ * B, and measured rather than assumed. Averaged over three seeds, median puck
+ * error is 0.0 units under B at every latency tested, against 58-102 under C
+ * and 106-211 under A; B also has the lowest p99 of the three. C spends most of
+ * its time interpolating — it only holds authority around an eighth of the run —
+ * so it inherits A's tail without A's simplicity.
+ *
+ * B's historic weakness was that its predicted puck was drawn at a different
+ * instant from the interpolated opponent, so their collisions did not line up
+ * on screen. That is fixed in `buildScene` by drawing the paddles on whichever
+ * timeline the puck came from, which removes the reason to prefer C by default.
  */
 let puckStrategy: PuckStrategy = 'predict';
 const puckSmoother = new PuckSmoother();
@@ -252,9 +266,9 @@ function createOnline(room: string, name: string): ActiveMatch {
 }
 
 const HINTS: Record<string, string> = {
-  spectate: 'Two bots playing in your browser. Drag Latency up, then toggle Netcode off.',
-  bot: 'Move your mouse or finger to control the cyan paddle.',
-  online: 'Playing a human. Both of you see the same authoritative match.',
+  spectate: 'Two bots playing in your browser. Open the netcode lab and drag Latency up.',
+  bot: 'Move your mouse or finger. You are the striker at the bottom.',
+  online: 'Playing a human. You are the striker at the bottom; both of you see the same match.',
 };
 
 /**
@@ -413,7 +427,9 @@ el.puck.addEventListener('change', () => {
 // Input
 // ---------------------------------------------------------------------------
 
-let view: View = { scale: 1, offsetX: 0, offsetY: 0 };
+// Replaced on the first rendered frame; only ever read by pointer mapping,
+// which cannot fire before then.
+let view: View = computeView(1, 1);
 
 function handlePointer(event: PointerEvent): void {
   const rect = canvas.getBoundingClientRect();
@@ -515,11 +531,36 @@ function buildScene(nowMs: number, deltaMs: number): ViewState | null {
   const interpolated = buffer.sample(nowMs);
   if (!interpolated) return null;
 
-  const paddles = interpolated.paddles.map((p) => ({ ...p }));
-  paddles[slot] = predictor.getRenderedSelf();
-
   const resolved = resolvePuck(puckStrategy, predictor, interpolated, slot);
   const puck = puckSmoother.apply(resolved, deltaMs);
+
+  /*
+   * Draw every paddle on the same timeline as the puck.
+   *
+   * This is the fix for the artefact where the opponent's paddle slides
+   * straight through the puck and the puck reacts somewhere else entirely.
+   * Interpolated remote paddles are shown in the past, roughly one
+   * interpolation delay behind; a predicted puck is shown in the present. When
+   * those two meet, the collision the player watches is between a paddle at one
+   * instant and a puck at another, so it does not look like a collision at all.
+   *
+   * The prediction already carries a full state, opponent included — it has to,
+   * because their paddle is what the predicted puck bounces off. So when the
+   * puck comes from the prediction, the paddles come from it too and the
+   * contact is exactly the one the puck actually reacted to. When the puck
+   * comes from snapshots, the paddles do as well, and the pair is consistent
+   * again — this time in the past.
+   *
+   * The cost is real and worth naming: on the predicted timeline the opponent's
+   * paddle is a guess about input we have not received, so it is less accurate
+   * than the interpolated one. That trade is deliberate. A paddle a few units
+   * off is invisible; a puck that ignores a hit is the whole game.
+   */
+  const paddles =
+    resolved.source === 'predicted'
+      ? interpolated.paddles.map((_, i) => predictor.getRenderedPaddle(i))
+      : interpolated.paddles.map((p) => ({ ...p }));
+  paddles[slot] = predictor.getRenderedSelf();
 
   return {
     paddles,
@@ -545,9 +586,16 @@ function buildScene(nowMs: number, deltaMs: number): ViewState | null {
  * Written only on change — this runs every frame, and an unconditional
  * `textContent` write invalidates layout whether or not the value moved.
  */
-const scoreboard = { left: '', right: '', ptsLeft: '', ptsRight: '' };
+const scoreboard = { left: '', right: '', ptsLeft: '', ptsRight: '', you: -2 };
 
 function updateScoreboard(scene: ViewState | null): void {
+  const you = scene?.slot ?? -1;
+  if (you !== scoreboard.you) {
+    scoreboard.you = you;
+    el.sideLeft.classList.toggle('you', you === 0);
+    el.sideRight.classList.toggle('you', you === 1);
+  }
+
   const names = scene?.names ?? [];
   const left = names[0] || 'Blue';
   const right = names[1] || 'Red';
@@ -590,7 +638,11 @@ function frame(): void {
 
   const scene = buildScene(now, deltaMs);
   updateScoreboard(scene);
-  view = render(ctx, canvas.width, canvas.height, scene, active.status());
+  // Every player looks at the table from their own end, so slot 1 gets the view
+  // turned through half a turn. Without it one of the two would be defending
+  // the goal at the top of their screen and pushing the puck away from
+  // themselves to attack, which nobody can play.
+  view = render(ctx, canvas.width, canvas.height, scene, active.status(), active.slot() === 1);
 
   // Skip the readouts entirely while the panel is hidden: it is a dozen DOM
   // writes per frame that nobody can see.

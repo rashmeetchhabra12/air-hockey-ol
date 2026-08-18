@@ -69,6 +69,16 @@ const MAX_REPLAY_INPUTS = 240;
  */
 const PUCK_SNAP_THRESHOLD = 140;
 
+/**
+ * Remote-paddle corrections larger than this are snapped rather than blended.
+ *
+ * A paddle cannot exceed `PADDLE_MAX_SPEED`, so easing a large error away would
+ * drag the opponent's paddle across the rink faster than a paddle can move —
+ * the same mistake the puck's catch-up cap exists to prevent. Sized so the blend
+ * stays inside the paddle's own speed limit over `CORRECTION_SMOOTH_MS`.
+ */
+const REMOTE_SNAP_THRESHOLD = 60;
+
 export interface PredictionStats {
   /** Inputs awaiting acknowledgement. Tracks round-trip time in ticks. */
   unackedInputs: number;
@@ -120,8 +130,10 @@ export class Predictor {
    * correction visible as a jolt, so the *simulation* takes the correction
    * immediately while the *rendering* catches up over a few frames.
    */
-  private offsetX = 0;
-  private offsetY = 0;
+  private readonly offsets: Array<{ x: number; y: number }> = Array.from(
+    { length: PLAYER_COUNT },
+    () => ({ x: 0, y: 0 }),
+  );
 
   /** Same mechanism as the paddle offset, applied to the predicted puck. */
   private puckOffsetX = 0;
@@ -156,9 +168,26 @@ export class Predictor {
 
   /** Own paddle position as it should be drawn, including the decaying correction. */
   getRenderedSelf(): { x: number; y: number } {
-    const paddle = this.state.paddles[this.slot];
-    if (!paddle) return { x: 0, y: 0 };
-    return { x: paddle.x + this.offsetX, y: paddle.y + this.offsetY };
+    return this.getRenderedPaddle(this.slot);
+  }
+
+  /**
+   * Any paddle as it should be drawn, on the *predicted* timeline.
+   *
+   * The opponent's paddle is normally interpolated from snapshots instead, and
+   * that is the better picture of where they actually are. This exists for the
+   * case where being right about their position matters less than being
+   * consistent with the puck: when the puck is predicted, it bounces off the
+   * opponent's paddle *where the prediction put it*, so drawing that paddle
+   * from interpolated data shows the puck rebounding off empty ice while the
+   * paddle sails through it untouched. See `main.ts` for where the choice is
+   * made.
+   */
+  getRenderedPaddle(slot: number): { x: number; y: number } {
+    const paddle = this.state.paddles[slot];
+    const offset = this.offsets[slot];
+    if (!paddle || !offset) return { x: 0, y: 0 };
+    return { x: paddle.x + offset.x, y: paddle.y + offset.y };
   }
 
   /**
@@ -219,9 +248,10 @@ export class Predictor {
     }
     this.lastAppliedTick = snapshot.tick;
 
-    const previous = this.state.paddles[this.slot];
-    const beforeX = previous?.x ?? 0;
-    const beforeY = previous?.y ?? 0;
+    // Every paddle's pre-reconcile position, not just this client's: the
+    // opponent's is also rendered from the prediction whenever the puck is, and
+    // it needs the same smoothing or it would jump on every snapshot.
+    const before = this.state.paddles.map((p) => ({ x: p.x, y: p.y }));
     const beforePuckX = this.state.puck.x;
     const beforePuckY = this.state.puck.y;
 
@@ -247,20 +277,39 @@ export class Predictor {
 
     this.reconcilePuck(beforePuckX, beforePuckY);
 
-    const corrected = this.state.paddles[this.slot];
-    if (!corrected) return;
+    for (let slot = 0; slot < this.state.paddles.length; slot++) {
+      const corrected = this.state.paddles[slot];
+      const was = before[slot];
+      const offset = this.offsets[slot];
+      if (!corrected || !was || !offset) continue;
 
-    const errorX = beforeX - corrected.x;
-    const errorY = beforeY - corrected.y;
-    const error = length(errorX, errorY);
-    this.stats.lastErrorUnits = error;
+      const errorX = was.x - corrected.x;
+      const errorY = was.y - corrected.y;
+      const error = length(errorX, errorY);
 
-    if (error > CORRECTION_DEADZONE) {
-      this.stats.corrections++;
+      // Only the local paddle's error is reported. It is the headline
+      // reconciliation metric and it means something precise — replay should
+      // reproduce the server exactly. The opponent's paddle is an open-loop
+      // guess about somebody else's input and is expected to be wrong; mixing
+      // the two would make the number meaningless.
+      if (slot === this.slot) this.stats.lastErrorUnits = error;
+
+      if (error <= CORRECTION_DEADZONE) continue;
+
+      if (slot === this.slot) {
+        this.stats.corrections++;
+      } else if (error > REMOTE_SNAP_THRESHOLD) {
+        // The opponent did something the replay could not have known about.
+        // Blending across it would drag their paddle at an impossible speed.
+        offset.x = 0;
+        offset.y = 0;
+        continue;
+      }
+
       // Carry the discrepancy into the visual offset so the on-screen paddle
       // does not jump. The simulation itself is already corrected.
-      this.offsetX += errorX;
-      this.offsetY += errorY;
+      offset.x += errorX;
+      offset.y += errorY;
     }
   }
 
@@ -302,12 +351,13 @@ export class Predictor {
     // produces the same amount of catch-up at 60 Hz or 144 Hz.
     const retain = Math.exp(-deltaMs / CORRECTION_SMOOTH_MS);
 
-    if (this.offsetX !== 0 || this.offsetY !== 0) {
-      this.offsetX *= retain;
-      this.offsetY *= retain;
-      if (length(this.offsetX, this.offsetY) < CORRECTION_DEADZONE) {
-        this.offsetX = 0;
-        this.offsetY = 0;
+    for (const offset of this.offsets) {
+      if (offset.x === 0 && offset.y === 0) continue;
+      offset.x *= retain;
+      offset.y *= retain;
+      if (length(offset.x, offset.y) < CORRECTION_DEADZONE) {
+        offset.x = 0;
+        offset.y = 0;
       }
     }
 
@@ -326,8 +376,10 @@ export class Predictor {
     this.state = stateFromSnapshot(snapshot);
     this.unacked = [];
     this.lastAppliedTick = snapshot.tick;
-    this.offsetX = 0;
-    this.offsetY = 0;
+    for (const offset of this.offsets) {
+      offset.x = 0;
+      offset.y = 0;
+    }
     this.puckOffsetX = 0;
     this.puckOffsetY = 0;
     this.stats.unackedInputs = 0;

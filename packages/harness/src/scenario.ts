@@ -24,6 +24,7 @@ import {
   createInitialState,
   length,
   PADDLE_RADIUS,
+  PUCK_MAX_SPEED,
   RINK_HEIGHT,
   RINK_WIDTH,
   SLOT_LEFT,
@@ -205,12 +206,25 @@ export interface ScenarioResult {
  * P6's rewind buffer will serve a different purpose and answer to different
  * constraints.
  */
+/** Furthest a puck can move in one tick, and so the trajectory-match tolerance. */
+const MAX_PUCK_TRAVEL_PER_TICK = PUCK_MAX_SPEED / TICK_RATE;
+
+/**
+ * Oldest display age worth believing.
+ *
+ * Generously beyond interpolation delay plus a round trip at the worst latency
+ * measured, so it rejects failed matches without truncating real ones.
+ */
+const MAX_PLAUSIBLE_AGE_MS = 600;
+
 class PuckHistory {
   private readonly ticks: number[] = [];
   private readonly xs: number[] = [];
   private readonly ys: number[] = [];
   /** Increments on every goal, so matching never spans a teleport. */
   private readonly epochs: number[] = [];
+  /** Whether play was stopped at that tick. */
+  private readonly frozen: boolean[] = [];
 
   private epoch = 0;
   private lastScoreTotal = 0;
@@ -233,12 +247,14 @@ class PuckHistory {
     this.xs.push(state.puck.x);
     this.ys.push(state.puck.y);
     this.epochs.push(this.epoch);
+    this.frozen.push(state.freezeTicks > 0);
 
     if (this.ticks.length > this.capacity) {
       this.ticks.shift();
       this.xs.shift();
       this.ys.shift();
       this.epochs.shift();
+      this.frozen.shift();
     }
   }
 
@@ -257,8 +273,9 @@ class PuckHistory {
    * irrelevant.
    */
   ageOf(shown: { x: number; y: number }): number | null {
-    // At 200 units/s the puck moves ~3.3 units per tick — comfortably more than
-    // the matching tolerance, so the nearest entry is unambiguous.
+    // Only meaningful while the puck is clearly moving. Below this, successive
+    // ticks sit almost on top of each other, every nearby history entry is an
+    // equally good match, and the reported age is arbitrary.
     if (this.currentSpeed < 200) return null;
 
     let bestTick = -1;
@@ -268,6 +285,11 @@ class PuckHistory {
       // Never match across a goal: the puck teleports, so positions either side
       // of one are not on the same trajectory.
       if (this.epochs[i] !== this.epoch) continue;
+
+      // Nor against a stopped puck: it sits in one place for many ticks, and
+      // any of them matches equally well.
+      if (this.frozen[i]) continue;
+
       const d = length(this.xs[i]! - shown.x, this.ys[i]! - shown.y);
       if (d < bestDistance) {
         bestDistance = d;
@@ -275,11 +297,30 @@ class PuckHistory {
       }
     }
 
-    // A puck moves at most 30 units per tick, so anything further out than that
-    // is not a trajectory match and would report a meaningless age.
-    if (bestTick < 0 || bestDistance > 30) return null;
+    // Anything further out than a single tick of travel is not on the
+    // trajectory at all. Derived rather than written as a literal: it was once
+    // hard-coded to the 30 units/tick a puck covered at the old speed ceiling,
+    // and lowering that ceiling silently widened the tolerance instead of
+    // tightening it.
+    if (bestTick < 0 || bestDistance > MAX_PUCK_TRAVEL_PER_TICK) return null;
 
-    return ((this.currentTick - bestTick) * 1000) / TICK_RATE;
+    const ageMs = ((this.currentTick - bestTick) * 1000) / TICK_RATE;
+
+    /*
+     * Reject implausibly old matches outright.
+     *
+     * A trajectory that doubles back — off a cushion, or off a paddle — passes
+     * close to where it was a moment ago, so the nearest entry can be one from
+     * far earlier on the path rather than the one actually being displayed.
+     * That is not a large measured lag, it is a failed match, and reporting it
+     * as a lag produced figures near the history capacity: a claimed 983 ms of
+     * staleness on a link whose true interpolation delay is under 100 ms.
+     *
+     * The display can only ever be behind by the interpolation delay plus about
+     * a round trip. Beyond that the match is wrong, and no answer is better
+     * than a confident wrong one.
+     */
+    return ageMs > MAX_PLAUSIBLE_AGE_MS ? null : ageMs;
   }
 
   get tick(): number {
@@ -302,10 +343,15 @@ class PuckHistory {
    * is staleness expressed in distance. Both are "how wrong was the picture",
    * which is the only question a player would recognise.
    */
-  positionAt(tick: number): { x: number; y: number; epoch: number } | null {
+  positionAt(tick: number): { x: number; y: number; epoch: number; frozen: boolean } | null {
     for (let i = this.ticks.length - 1; i >= 0; i--) {
       if (this.ticks[i] === tick) {
-        return { x: this.xs[i]!, y: this.ys[i]!, epoch: this.epochs[i]! };
+        return {
+          x: this.xs[i]!,
+          y: this.ys[i]!,
+          epoch: this.epochs[i]!,
+          frozen: this.frozen[i]!,
+        };
       }
     }
     return null;
@@ -549,6 +595,14 @@ class SimulatedPlayer {
       // A goal between drawing and resolving makes the comparison meaningless:
       // the puck teleported, and no display could have been "right" about it.
       if (!truth || truth.epoch !== oldest.epoch) continue;
+
+      // Skip the face-off pauses. The puck is parked at centre and every
+      // strategy reports it perfectly, so these frames are not a measurement of
+      // anything — they only dilute the statistic, and by enough to matter: a
+      // twelve-second run with two goals is half freeze, which is sufficient to
+      // drag a median to exactly zero and make a real difference between
+      // strategies disappear.
+      if (truth.frozen) continue;
 
       const error = length(oldest.x - truth.x, oldest.y - truth.y);
       this.puckError.add(error);

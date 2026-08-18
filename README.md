@@ -144,17 +144,17 @@ local game, in rink units (the rink is 1000 x 600; a paddle is 34 across).
 
 | RTT | netcode off (p50) | netcode off (p99) | **netcode on (p50)** | **netcode on (p99)** |
 |---:|---:|---:|---:|---:|
-| 0 ms | 15.0 | 86.4 | **0.0** | **0.0** |
-| 100 ms | 11.1 | 64.9 | **0.0** | **0.0** |
-| 200 ms | 42.6 | 260.0 | **0.0** | **8.9** |
-| 300 ms | 266.1 | 266.7 | **0.0** | **28.3** |
+| 0 ms | 12.4 | 187.1 | **0.0** | **0.0** |
+| 100 ms | 15.8 | 201.5 | **0.0** | **0.0** |
+| 200 ms | 3.7 | 291.2 | **0.0** | **3.6** |
+| 300 ms | 336.1 | 336.6 | **0.0** | **33.8** |
 
 **Wire format.** Measured over identical gameplay, both codecs, per client:
 
 | Conditions | JSON down | **binary down** | JSON up | **binary up** | reduction |
 |---|---:|---:|---:|---:|---:|
-| clean 100 ms | 8.18 KiB/s | **1.00 KiB/s** | 5.71 KiB/s | **0.63 KiB/s** | 88% |
-| 200 ms + 50 ms jitter | 8.02 KiB/s | **0.99 KiB/s** | 5.63 KiB/s | **0.63 KiB/s** | 88% |
+| clean 100 ms | 7.80 KiB/s | **0.95 KiB/s** | 5.56 KiB/s | **0.63 KiB/s** | 88% |
+| 200 ms + 50 ms jitter | 7.90 KiB/s | **0.99 KiB/s** | 5.62 KiB/s | **0.63 KiB/s** | 88% |
 
 Correction error is 0.0 under both, so the quantisation is invisible in practice
 even though it is provably lossy.
@@ -164,9 +164,9 @@ retransmitted rather than dropped, and everything behind it waits.
 
 | Loss | datagram p99 | **TCP-like p99** |
 |---|---:|---:|
-| 1% | 70 ms | **140 ms** |
-| 5% | 70 ms | **186 ms** |
-| 10% | 70 ms | **283 ms** |
+| 1% | 70 ms | **181 ms** |
+| 5% | 70 ms | **189 ms** |
+| 10% | 70 ms | **445 ms** |
 
 This is the honest answer to "why not UDP?", and it is a number rather than an
 opinion. Note the median barely moves — at a 20 Hz snapshot rate only two or
@@ -179,8 +179,8 @@ round trip, and the measurement lands on it:
 
 | RTT | 0 | 50 | 100 | 200 | 300 |
 |---|---:|---:|---:|---:|---:|
-| expected | 100 | 125 | 150 | 200 | 250 |
-| measured p50 | 100 | 117 | 150 | 200 | 250 |
+| expected | 58 | 83 | 108 | 158 | 208 |
+| measured p50 | 67 | 83 | 117 | 167 | 217 |
 
 **Puck strategies, head to head.** How wrong the displayed puck was about the
 moment it claimed to depict, in rink units — recorded when the client draws tick
@@ -190,10 +190,28 @@ motion. The puck is 18 units across.
 
 | RTT | A p50 | A p99 | A jump/s | B p50 | B p99 | B jump/s | **C p50** | **C p99** | **C jump/s** |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 50 ms | 170.7 | 298.2 | 0.0 | 0.0 | 44.1 | 0.3 | **136.2** | **291.1** | **0.1** |
-| 100 ms | 63.2 | 427.7 | 0.1 | 0.0 | 135.5 | 0.5 | **0.0** | **440.3** | **0.2** |
-| 200 ms | 249.2 | 530.3 | 0.1 | 0.0 | 277.4 | 0.7 | **132.3** | **494.5** | **0.5** |
-| 300 ms | 285.2 | 599.7 | 0.2 | 0.0 | 456.3 | 1.4 | **124.3** | **573.1** | **0.6** |
+| 50 ms | 0.0 | 214.1 | 0.0 | 0.0 | 93.7 | 0.1 | **0.0** | **173.2** | **0.1** |
+| 100 ms | 168.8 | 280.1 | 0.1 | 0.0 | 219.8 | 0.6 | **24.4** | **234.4** | **0.4** |
+| 200 ms | 162.6 | 394.0 | 0.0 | 0.0 | 192.3 | 0.8 | **0.2** | **327.4** | **0.6** |
+| 300 ms | 183.5 | 580.5 | 0.1 | 0.0 | 473.5 | 0.6 | **55.0** | **381.0** | **0.4** |
+
+**Everything on screen has to share a timeline.** The measurement above asks how
+wrong each entity was on its own, and misses the failure that players actually
+notice. A predicted puck is drawn at the present instant; an interpolated
+opponent is drawn roughly one interpolation delay in the past. When those two
+meet, the collision on screen is between a paddle at one moment and a puck at
+another — so the opponent's striker slides straight through the puck and the
+puck rebounds off nothing. It was the single most-reported problem in playtesting
+and no per-entity error metric shows it, because both entities were individually
+about as right as they could be.
+
+The fix is to draw the paddles from whichever source produced the puck: from the
+prediction when the puck is predicted, from snapshots when it is interpolated.
+The prediction already carries the opponent — it has to, since their paddle is
+what the predicted puck bounces off — so the contact shown is exactly the one
+the puck reacted to. The cost is a less accurate opponent position on the
+predicted timeline, and it is worth paying: a paddle a few units off is
+invisible, a puck that ignores a hit is the whole game.
 
 **No strategy wins outright, and that is the honest result.** B is the most
 accurate and the least smooth. A is the smoothest and the least accurate. C sits
@@ -205,10 +223,10 @@ What C actually buys is *where* its accuracy goes. Split by who held authority:
 
 | RTT | C, while you own it (p50) | C, while you do not (p50) | owned |
 |---:|---:|---:|---:|
-| 50 ms | **2.6** | 153.6 | 19% |
-| 100 ms | **0.0** | 176.0 | 72% |
-| 200 ms | **7.2** | 212.3 | 42% |
-| 300 ms | **2.5** | 253.6 | 39% |
+| 50 ms | **0.2** | 0.0 | 13% |
+| 100 ms | **0.6** | 150.2 | 35% |
+| 200 ms | **0.0** | 170.0 | 66% |
+| 300 ms | **0.1** | 210.4 | 40% |
 
 When you are the one about to hit the puck, C is as exact as B. When your
 opponent is playing it, C shows real data late instead of guessing. The frames
@@ -218,7 +236,7 @@ it is "wrong" about are the ones you are watching rather than playing.
 |---|---|
 | Durable Object tick rate | 59.99 Hz sustained over 30 s, zero catch-up clamping |
 | Reconciliation error, clean link | 0.00 units — prediction is exact, not approximate |
-| Bandwidth, JSON | 3.10 KiB/s up, 4.71 KiB/s down per client |
+| Bandwidth, JSON | 5.56 KiB/s up, 7.80 KiB/s down per client |
 
 **Measure the right thing.** Two metrics had to be redesigned after they
 produced nonsense. Puck staleness was first measured as *distance* from the
@@ -351,13 +369,20 @@ itself the artefact it existed to prevent, now rate-capped.
 
 ## Known open questions
 
-Paddle lag with prediction on is 0.00 units at the median for every latency, but
-its p99 grows to ~28 units at 300 ms RTT where it used to be 0. Steady-state
-late inputs, rewinds, and reconciliation corrections all measure zero at that
-latency, so it is none of the obvious candidates, and the harness's tick-skew
-instrumentation reads exactly 0. The bound in the tests is deliberately loose
-and commented as such rather than tightened around a number whose cause is not
-yet understood.
+Paddle lag with prediction on is 0.00 units at the median for every latency and
+stays under half a paddle radius at p95, but its p99 reaches ~98 units at 300 ms
+RTT. Below 300 ms it does not appear at all — p99 there is under a third of a
+unit.
+
+What is now known about it: the magnitude is the same to four significant
+figures across unrelated seeds, around 154 units, which is close to ten ticks of
+full-speed paddle travel. That makes it a fixed structural offset rather than
+chance. It survives runs containing no goals, so it is not the face-off freeze.
+Steady-state late inputs, rewinds and reconciliation corrections all measure
+exactly zero at that latency, and the tick-skew instrumentation reads exactly 0,
+so it is none of the obvious candidates either. The bound in the tests is
+deliberately loose and commented as such rather than tightened around a number
+whose cause is not yet understood.
 
 ## Roadmap
 

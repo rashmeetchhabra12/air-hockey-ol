@@ -9,11 +9,11 @@ The rink is 1000 x 600, and a paddle is 34 units across.
 
 | RTT | netcode off (p50) | netcode off (p99) | **netcode on (p50)** | **netcode on (p99)** |
 |---:|---:|---:|---:|---:|
-| 0 ms | 15.0 | 117.7 | **0.0** | **0.0** |
-| 50 ms | 13.6 | 117.3 | **0.0** | **0.0** |
-| 100 ms | 30.2 | 170.5 | **0.0** | **0.0** |
-| 200 ms | 93.7 | 268.9 | **0.0** | **12.0** |
-| 300 ms | 266.1 | 266.7 | **0.0** | **24.4** |
+| 0 ms | 12.4 | 187.1 | **0.0** | **0.0** |
+| 50 ms | 3.6 | 291.1 | **0.0** | **0.0** |
+| 100 ms | 15.8 | 201.5 | **0.0** | **0.0** |
+| 200 ms | 3.7 | 291.2 | **0.0** | **3.6** |
+| 300 ms | 336.1 | 336.6 | **0.0** | **33.8** |
 
 ### Holding up under impairment
 
@@ -22,11 +22,11 @@ it becomes non-zero only when inputs are lost or arrive too late to use.
 
 | Conditions | correction p50 | correction p99 | corrections/s | starved frames | goals |
 |---|---:|---:|---:|---:|---:|
-| clean 100ms | 0.0 | 0.0 | 0.0 | 0.00% | 3 |
-| 100ms + 30ms jitter | 0.0 | 0.0 | 0.0 | 0.00% | 1 |
-| 100ms + 2% loss | 7.8 | 20.1 | 0.3 | 1.59% | 1 |
-| 200ms + 50ms jitter + 5% loss | 1.6 | 3.5 | 0.2 | 1.70% | 2 |
-| 300ms + 80ms jitter + 10% loss | 0.0 | 0.0 | 0.0 | 2.62% | 1 |
+| clean 100ms | 0.0 | 0.0 | 0.0 | 0.00% | 2 |
+| 100ms + 30ms jitter | 0.0 | 0.0 | 0.0 | 0.00% | 2 |
+| 100ms + 2% loss | 0.6 | 1.8 | 0.3 | 1.91% | 2 |
+| 200ms + 50ms jitter + 5% loss | 3.9 | 3.9 | 0.1 | 0.53% | 1 |
+| 300ms + 80ms jitter + 10% loss | 2.7 | 22.6 | 0.3 | 0.44% | 2 |
 
 ### What TCP costs
 
@@ -36,9 +36,9 @@ and everything behind it waits — head-of-line blocking.
 
 | Loss | datagram p50 | datagram p99 | TCP-like p50 | **TCP-like p99** | retransmits |
 |---|---:|---:|---:|---:|---:|
-| 1% loss | 51 ms | 70 ms | 51 ms | **162 ms** | 16 |
-| 5% loss | 52 ms | 70 ms | 54 ms | **184 ms** | 46 |
-| 10% loss | 50 ms | 70 ms | 60 ms | **445 ms** | 101 |
+| 1% loss | 51 ms | 70 ms | 49 ms | **181 ms** | 9 |
+| 5% loss | 51 ms | 70 ms | 54 ms | **189 ms** | 44 |
+| 10% loss | 51 ms | 70 ms | 59 ms | **445 ms** | 112 |
 
 ### Lag compensation
 
@@ -57,17 +57,17 @@ which checks a late input produces the same state as one that was never late.
 
 | RTT (+30ms jitter) | late inputs/s | rewinds/s | avg rewind depth | correction p99, rewind **on** | correction p99, rewind **off** |
 |---:|---:|---:|---:|---:|---:|
-| 50 ms | 0.4 | 0.9 | 1.0 | **0.0** | 0.0 |
-| 150 ms | 2.1 | 4.4 | 1.2 | **0.0** | 1.3 |
-| 300 ms | 12.9 | 12.2 | 2.3 | **0.1** | 19.2 |
+| 50 ms | 0.4 | 1.0 | 1.0 | **0.0** | 0.0 |
+| 150 ms | 3.3 | 4.8 | 1.2 | **0.0** | 0.0 |
+| 300 ms | 12.8 | 11.7 | 2.3 | **2.2** | 34.2 |
 
 Client lead, in ticks, and how often the server reported an empty forward
 buffer — the signal the client steers on:
 
 | RTT | lead p50 | starved reports/s | discarded (beyond window)/s |
 |---:|---:|---:|---:|
-| 50 ms | 9 | 0.3 | 0.00 |
-| 150 ms | 15 | 1.0 | 0.00 |
+| 50 ms | 9 | 0.1 | 0.00 |
+| 150 ms | 15 | 1.7 | 0.00 |
 | 300 ms | 28 | 4.7 | 0.00 |
 
 ### Wire format
@@ -80,8 +80,8 @@ blocking guarantees no snapshot is ever missing.
 
 | Conditions | JSON down | **binary down** | JSON up | **binary up** | reduction |
 |---|---:|---:|---:|---:|---:|
-| clean 100ms | 7.30 KiB/s | **0.94 KiB/s** | 5.51 KiB/s | **0.63 KiB/s** | 87% |
-| 200ms + 50ms jitter | 7.36 KiB/s | **0.92 KiB/s** | 5.57 KiB/s | **0.63 KiB/s** | 87% |
+| clean 100ms | 7.80 KiB/s | **0.95 KiB/s** | 5.56 KiB/s | **0.63 KiB/s** | 88% |
+| 200ms + 50ms jitter | 7.90 KiB/s | **0.99 KiB/s** | 5.62 KiB/s | **0.63 KiB/s** | 88% |
 
 What it costs: quantisation gives up bit-exact state reconstruction. A client
 adopting a JSON snapshot resumes from the server’s exact numbers; one adopting
@@ -94,8 +94,8 @@ but it is a real property traded away rather than a free win.
 |---|---|---:|---:|---:|
 | clean 100ms | JSON | 0.0 | 0.0 | 0.00 |
 | clean 100ms | binary | 0.0 | 0.0 | 0.00 |
-| 200ms + 50ms jitter | JSON | 1.0 | 11.3 | 0.13 |
-| 200ms + 50ms jitter | binary | 3.7 | 4.0 | 0.19 |
+| 200ms + 50ms jitter | JSON | 0.1 | 3.4 | 0.13 |
+| 200ms + 50ms jitter | binary | 0.1 | 4.3 | 0.38 |
 
 ### Puck strategies, head to head
 
@@ -117,10 +117,10 @@ occasionally snaps sideways reads as broken.
 
 | RTT | A p50 | A p99 | A jump/s | B p50 | B p99 | B jump/s | **C p50** | **C p99** | **C jump/s** |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 50 ms | 0.0 | 396.6 | 0.2 | 0.0 | 152.6 | 0.6 | **0.0** | **403.3** | **0.4** |
-| 100 ms | 0.0 | 434.9 | 0.2 | 0.0 | 198.4 | 0.9 | **0.0** | **436.3** | **0.3** |
-| 200 ms | 229.9 | 559.7 | 0.1 | 0.0 | 330.2 | 1.8 | **15.7** | **516.5** | **0.7** |
-| 300 ms | 180.8 | 757.1 | 0.1 | 0.0 | 625.6 | 2.1 | **20.2** | **504.4** | **0.9** |
+| 50 ms | 0.0 | 214.1 | 0.0 | 0.0 | 93.7 | 0.1 | **0.0** | **173.2** | **0.1** |
+| 100 ms | 168.8 | 280.1 | 0.1 | 0.0 | 219.8 | 0.6 | **24.4** | **234.4** | **0.4** |
+| 200 ms | 162.6 | 394.0 | 0.0 | 0.0 | 192.3 | 0.8 | **0.2** | **327.4** | **0.6** |
+| 300 ms | 183.5 | 580.5 | 0.1 | 0.0 | 473.5 | 0.6 | **55.0** | **381.0** | **0.4** |
 
 No strategy wins outright, which is the honest result. B is the most
 accurate and the least smooth; A is the smoothest and the least accurate;
@@ -134,23 +134,25 @@ accuracy when you are about to hit the puck, A’s correctness when you are not:
 
 | RTT | C, while you own it (p50 / p99) | C, while you do not (p50 / p99) | owned | handoffs/s |
 |---:|---:|---:|---:|---:|
-| 50 ms | **0.2 / 244.1** | 0.0 / 430.5 | 26% | 0.9 |
-| 100 ms | **5.6 / 228.5** | 0.0 / 453.5 | 26% | 0.4 |
-| 200 ms | **2.0 / 498.5** | 125.3 / 553.4 | 41% | 0.6 |
-| 300 ms | **0.2 / 451.0** | 200.9 / 616.8 | 62% | 0.8 |
+| 50 ms | **0.2 / 233.0** | 0.0 / 95.0 | 13% | 0.3 |
+| 100 ms | **0.6 / 222.6** | 150.2 / 348.6 | 35% | 0.6 |
+| 200 ms | **0.0 / 255.0** | 170.0 / 345.4 | 66% | 0.4 |
+| 300 ms | **0.1 / 238.1** | 210.4 / 396.8 | 40% | 0.5 |
 
 ### How stale the puck looks (strategy A)
 
 How far into the past the on-screen puck actually is, found by matching it
-against recorded authoritative positions. Expected value is roughly the
-100 ms interpolation delay plus half the round trip — which is exactly the
-cost of never predicting the puck, and what strategies B and C will reduce.
+against recorded authoritative positions. Expected value is the
+interpolation delay plus half the round trip — which is exactly the cost of
+never predicting the puck, and what strategies B and C will reduce. The
+delay is adaptive and settles near its floor on these links, so the
+expected column uses that floor rather than the fixed value it replaced.
 
 | RTT | expected | p50 | p95 | p99 |
 |---:|---:|---:|---:|---:|
-| 0 ms | ~100 ms | 67 ms | 83 ms | 983 ms |
-| 50 ms | ~125 ms | 83 ms | 983 ms | 983 ms |
-| 100 ms | ~150 ms | 117 ms | 983 ms | 983 ms |
-| 200 ms | ~200 ms | 167 ms | 183 ms | 983 ms |
-| 300 ms | ~250 ms | 217 ms | 233 ms | 983 ms |
+| 0 ms | ~58 ms | 67 ms | 67 ms | 167 ms |
+| 50 ms | ~83 ms | 83 ms | 400 ms | 567 ms |
+| 100 ms | ~108 ms | 117 ms | 117 ms | 133 ms |
+| 200 ms | ~158 ms | 167 ms | 167 ms | 183 ms |
+| 300 ms | ~208 ms | 217 ms | 217 ms | 217 ms |
 

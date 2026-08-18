@@ -109,6 +109,16 @@
       .side.left  .chip { background: var(--blue); }
       .side.right .chip { background: var(--red); }
 
+      /* Which of the two is you. The table already puts your goal at the
+         bottom, but the scoreboard is symmetric and needs saying. */
+      .side.you .who { color: var(--text); }
+
+      .side.you .who::after {
+        content: ' (you)';
+        color: var(--dim);
+        font-weight: 500;
+      }
+
       .who {
         font: 600 12px/1 ui-sans-serif, system-ui, sans-serif;
         color: var(--muted);
@@ -629,13 +639,13 @@
         </div>
 
         <div id="scoreboard">
-          <div class="side left">
+          <div class="side left" id="side-left">
             <span class="chip"></span>
             <span class="who" id="name-left">Blue</span>
             <span class="pts" id="pts-left">0</span>
           </div>
           <span id="target">First to 7</span>
-          <div class="side right">
+          <div class="side right" id="side-right">
             <span class="chip"></span>
             <span class="who" id="name-right">Red</span>
             <span class="pts" id="pts-right">0</span>

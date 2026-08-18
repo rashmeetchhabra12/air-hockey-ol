@@ -47,16 +47,28 @@ export const PADDLE_RADIUS = 34;
 export const PADDLE_MAX_SPEED = 900; // units/second
 
 /** Puck speed ceiling, applied after every impulse. Prevents CCD tunnelling blowups. */
-export const PUCK_MAX_SPEED = 1800; // units/second
+export const PUCK_MAX_SPEED = 1350; // units/second
 
 /**
- * Per-tick velocity retention. Air hockey is near-frictionless, so this is
- * close to 1. Multiplication only, so it is bit-deterministic.
+ * Per-tick velocity retention. Multiplication only, so it is bit-deterministic.
+ *
+ * A real air hockey table is very low friction but it is not frictionless: the
+ * cushion of air leaks, the puck spins, and a loose puck visibly settles rather
+ * than circulating forever. At 0.999 per tick the puck kept 94% of its speed
+ * every second, which made rallies feel weightless and never let the puck come
+ * to rest. This retains about 76% per second instead, so a hard shot still
+ * crosses the table quickly but a soft one dies where it is played.
  */
-export const PUCK_FRICTION = 0.999;
+export const PUCK_FRICTION = 0.9955;
 
-/** Coefficient of restitution for puck/wall and puck/post bounces. */
-export const WALL_RESTITUTION = 0.92;
+/**
+ * Coefficient of restitution for puck/wall and puck/post bounces.
+ *
+ * Below the old 0.92: rail bounces on a real table are audibly lossy, and a
+ * puck that keeps nearly all its speed off every cushion ricochets around the
+ * rink for far longer than anyone can read.
+ */
+export const WALL_RESTITUTION = 0.86;
 
 /**
  * Coefficient of restitution for puck/paddle strikes. Above 1 would add energy.
@@ -67,7 +79,7 @@ export const WALL_RESTITUTION = 0.92;
  * `(1 + PADDLE_RESTITUTION)` times the paddle's own speed. Adding a second knob
  * on top would double-count it.
  */
-export const PADDLE_RESTITUTION = 0.95;
+export const PADDLE_RESTITUTION = 0.9;
 
 // ---------------------------------------------------------------------------
 // Solver

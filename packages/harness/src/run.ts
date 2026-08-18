@@ -357,18 +357,23 @@ for (const row of strategyRows) {
 }
 out.push('');
 
+/** The adaptive interpolation delay's floor — see `netcode/interpolation.ts`. */
+const INTERPOLATION_FLOOR_MS = 58;
+
 out.push('### How stale the puck looks (strategy A)');
 out.push('');
 out.push('How far into the past the on-screen puck actually is, found by matching it');
-out.push('against recorded authoritative positions. Expected value is roughly the');
-out.push('100 ms interpolation delay plus half the round trip — which is exactly the');
-out.push('cost of never predicting the puck, and what strategies B and C will reduce.');
+out.push('against recorded authoritative positions. Expected value is the');
+out.push('interpolation delay plus half the round trip — which is exactly the cost of');
+out.push('never predicting the puck, and what strategies B and C will reduce. The');
+out.push('delay is adaptive and settles near its floor on these links, so the');
+out.push('expected column uses that floor rather than the fixed value it replaced.');
 out.push('');
 out.push('| RTT | expected | p50 | p95 | p99 |');
 out.push('|---:|---:|---:|---:|---:|');
 for (const row of onOff) {
   out.push(
-    `| ${row.rtt} ms | ~${ms(100 + row.rtt / 2)} ms | ${ms(row.on.puckDisplayLagMs.p50)} ms ` +
+    `| ${row.rtt} ms | ~${ms(INTERPOLATION_FLOOR_MS + row.rtt / 2)} ms | ${ms(row.on.puckDisplayLagMs.p50)} ms ` +
       `| ${ms(row.on.puckDisplayLagMs.p95)} ms | ${ms(row.on.puckDisplayLagMs.p99)} ms |`,
   );
 }

@@ -4,12 +4,14 @@ import {
   GOAL_Y_MAX,
   GOAL_Y_MIN,
   PADDLE_RADIUS,
+  PUCK_FRICTION,
   PUCK_MAX_SPEED,
   PUCK_RADIUS,
   RINK_HEIGHT,
   RINK_WIDTH,
   SLOT_LEFT,
   SLOT_RIGHT,
+  TICK_RATE,
   WALL_RESTITUTION,
 } from '../src/config.js';
 import { length } from '../src/math.js';
@@ -184,9 +186,12 @@ describe('wall and post behaviour', () => {
     state = stepMany(state, IDLE, 40);
 
     expect(state.puck.vy).toBeGreaterThan(0); // now travelling back down
-    // Friction acts over the run too, so allow a band rather than an exact value.
+    // Friction acts over the whole run, so the expected value is the restitution
+    // *and* forty ticks of decay. Accounting for it explicitly rather than with
+    // a loose band keeps this a test of the bounce rather than of the tolerance.
+    const decayed = before * WALL_RESTITUTION * PUCK_FRICTION ** 40;
     expect(Math.abs(state.puck.vy)).toBeLessThan(before * WALL_RESTITUTION * 1.01);
-    expect(Math.abs(state.puck.vy)).toBeGreaterThan(before * WALL_RESTITUTION * 0.9);
+    expect(Math.abs(state.puck.vy)).toBeGreaterThan(decayed * 0.95);
   });
 
   it('bounces off an end wall above the goal mouth instead of scoring', () => {
@@ -397,11 +402,15 @@ describe('paddle strikes', () => {
   it('does not let a full-speed puck tunnel through a stationary paddle', () => {
     const state = createInitialState();
     const paddle = state.paddles[SLOT_LEFT]!;
-    // Line the puck up dead-centre on the paddle, one tick of travel away.
+    // Line the puck up dead-centre on the paddle, just inside one tick of
+    // travel. Derived from the speed ceiling rather than written as a literal,
+    // so retuning the ceiling cannot silently turn this into a test of a puck
+    // that never reached the paddle at all.
+    const gap = ((PUCK_MAX_SPEED / TICK_RATE) * 4) / 5;
     paddle.targetX = paddle.x;
     paddle.targetY = paddle.y;
     state.puck.y = paddle.y;
-    state.puck.x = paddle.x + PADDLE_RADIUS + PUCK_RADIUS + 25;
+    state.puck.x = paddle.x + PADDLE_RADIUS + PUCK_RADIUS + gap;
     state.puck.vx = -PUCK_MAX_SPEED;
     state.puck.vy = 0;
 
